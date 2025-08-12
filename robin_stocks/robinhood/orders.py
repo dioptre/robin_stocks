@@ -1,1522 +1,634 @@
-"""Contains all functions for placing orders for stocks, options, and crypto."""
-from uuid import uuid4
-
-from robin_stocks.robinhood.crypto import *
-from robin_stocks.robinhood.helper import *
-from robin_stocks.robinhood.profiles import *
-from robin_stocks.robinhood.stocks import *
-from robin_stocks.robinhood.urls import *
-
-@login_required
-def get_all_stock_orders(info=None, account_number=None, start_date=None):
-    """Returns a list of all the orders that have been processed for the account.
-
-    :param info: Will filter the results to get a specific value.
-    :type info: Optional[str]
-    :param start_date: Sets the date of when to start returning orders, returns all orders up to current date and time.
-    :type date: Optional[str] format, should this be sent as a DT object? I believe it's safer to require it to be handed to the function as a string.
-    :returns: Returns a list of dictionaries of key/value pairs for each order. If info parameter is provided, \
-    a list of strings is returned where the strings are the value of the key that matches info.
-
-    """
-    url = orders_url(account_number=account_number, start_date=start_date)
-    data = request_get(url, 'pagination')
-    return(filter_data(data, info))
-
-
-@login_required
-def get_all_option_orders(info=None, account_number=None, start_date=None):
-    """Returns a list of all the option orders that have been processed for the account.
-
-    :param info: Will filter the results to get a specific value.
-    :type info: Optional[str]
-    :param start_date: Sets the date of when to start returning orders, returns all orders up to current date and time.
-    :type date: Optional[str] format, should this be sent as a DT object? I believe it's safer to require it to be handed to the function as a string.
-    :returns: Returns a list of dictionaries of key/value pairs for each option order. If info parameter is provided, \
-    a list of strings is returned where the strings are the value of the key that matches info.
-
-    """
-    url = option_orders_url(account_number=account_number, start_date=start_date)
-    data = request_get(url, 'pagination')
-    return(filter_data(data, info))
-
-
-@login_required
-def get_all_crypto_orders(info=None):
-    """Returns a list of all the crypto orders that have been processed for the account.
-
-    :param info: Will filter the results to get a specific value.
-    :type info: Optional[str]
-    :returns: Returns a list of dictionaries of key/value pairs for each option order. If info parameter is provided, \
-    a list of strings is returned where the strings are the value of the key that matches info.
-
-    """
-    url = crypto_orders_url()
-    data = request_get(url, 'pagination')
-    return(filter_data(data, info))
-
-
-@login_required
-def get_all_open_stock_orders(info=None, account_number=None):
-    """Returns a list of all the orders that are currently open.
-
-    :param info: Will filter the results to get a specific value.
-    :type info: Optional[str]
-    :returns: Returns a list of dictionaries of key/value pairs for each order. If info parameter is provided, \
-    a list of strings is returned where the strings are the value of the key that matches info.
-
-    """
-    url = orders_url(account_number=account_number)
-    data = request_get(url, 'pagination')
-
-    data = [item for item in data if item['cancel'] is not None]
-
-    return(filter_data(data, info))
-
-
-@login_required
-def get_all_open_option_orders(info=None, account_number=None):
-    """Returns a list of all the orders that are currently open.
-
-    :param info: Will filter the results to get a specific value.
-    :type info: Optional[str]
-    :returns: Returns a list of dictionaries of key/value pairs for each order. If info parameter is provided, \
-    a list of strings is returned where the strings are the value of the key that matches info.
-
-    """
-    url = option_orders_url(account_number=account_number)
-    data = request_get(url, 'pagination')
-
-    data = [item for item in data if item['cancel_url'] is not None]
-
-    return(filter_data(data, info))
-
-
-@login_required
-def get_all_open_crypto_orders(info=None):
-    """Returns a list of all the crypto orders that have been processed for the account.
-
-    :param info: Will filter the results to get a specific value.
-    :type info: Optional[str]
-    :returns: Returns a list of dictionaries of key/value pairs for each option order. If info parameter is provided, \
-    a list of strings is returned where the strings are the value of the key that matches info.
-
-    """
-    url = crypto_orders_url()
-    data = request_get(url, 'pagination')
-
-    data = [item for item in data if item['cancel_url'] is not None]
-
-    return(filter_data(data, info))
-
-
-@login_required
-def get_stock_order_info(orderID):
-    """Returns the information for a single order.
-
-    :param orderID: The ID associated with the order. Can be found using get_all_orders(info=None) or get_all_orders(info=None).
-    :type orderID: str
-    :returns: Returns a list of dictionaries of key/value pairs for the order.
-
-    """
-    url = orders_url(orderID)
-    data = request_get(url)
-    return(data)
-
-
-@login_required
-def get_option_order_info(order_id):
-    """Returns the information for a single option order.
-
-    :param order_id: The ID associated with the option order.
-    :type order_id: str
-    :returns: Returns a list of dictionaries of key/value pairs for the order.
-
-    """
-    url = option_orders_url(order_id)
-    data = request_get(url)
-    return data
-
-
-@login_required
-def get_crypto_order_info(order_id):
-    """Returns the information for a single crypto order.
-
-    :param order_id: The ID associated with the option order.
-    :type order_id: str
-    :returns: Returns a list of dictionaries of key/value pairs for the order.
-
-    """
-    url = crypto_orders_url(order_id)
-    data = request_get(url)
-    return data
-
-
-@login_required
-def find_stock_orders(**arguments):
-    """Returns a list of orders that match the keyword parameters.
-
-    :param arguments: Variable length of keyword arguments. EX. find_orders(symbol='FB',cancel=None,quantity=1)
-    :type arguments: str
-    :returns: Returns a list of orders.
-
-    """ 
-    url = orders_url()
-    data = request_get(url, 'pagination')
-
-    if (len(arguments) == 0):
-        return(data)
-
-    for item in data:
-        item['quantity'] = str(float(item['quantity']))
-        item['cumulative_quantity'] = str(float(item['cumulative_quantity']))
-
-    if 'symbol' in arguments.keys():
-        arguments['instrument'] = get_instruments_by_symbols(
-            arguments['symbol'], info='url')[0]
-        del arguments['symbol']
-
-    if 'quantity' in arguments.keys():
-        arguments['quantity'] = str(arguments['quantity'])
-
-    stop = len(arguments.keys())-1
-    list_of_orders = []
-    for item in data:
-        for i, (key, value) in enumerate(arguments.items()):
-            if key not in item:
-                print(error_argument_not_key_in_dictionary(key), file=get_output())
-                return([None])
-            if value != item[key]:
-                break
-            if i == stop:
-                list_of_orders.append(item)
-
-    return(list_of_orders)
-
-
-@login_required
-def cancel_stock_order(orderID):
-    """Cancels a specific order.
-
-    :param orderID: The ID associated with the order. Can be found using get_all_stock_orders(info=None).
-    :type orderID: str
-    :returns: Returns the order information for the order that was cancelled.
-
-    """ 
-    url = cancel_url(orderID)
-    data = request_post(url)
-
-    if data:
-        print('Order '+str(orderID)+' cancelled', file=get_output())
-    return(data)
-
-
-@login_required
-def cancel_option_order(orderID):
-    """Cancels a specific option order.
-
-    :param orderID: The ID associated with the order. Can be found using get_all_option_orders(info=None).
-    :type orderID: str
-    :returns: Returns the order information for the order that was cancelled.
-
-    """ 
-    url = option_cancel_url(orderID)
-    data = request_post(url)
-
-    if data:
-        print('Order '+str(orderID)+' cancelled', file=get_output())
-    return(data)
-
-
-@login_required
-def cancel_crypto_order(orderID):
-    """Cancels a specific crypto order.
-
-    :param orderID: The ID associated with the order. Can be found using get_all_crypto_orders(info=None).
-    :type orderID: str
-    :returns: Returns the order information for the order that was cancelled.
-
-    """ 
-    url = crypto_cancel_url(orderID)
-    data = request_post(url)
-
-    if data:
-        print('Order '+str(orderID)+' cancelled', file=get_output())
-    return(data)
-
-
-@login_required
-def cancel_all_stock_orders(account_number=None):
-    """Cancels all stock orders.
-
-    :returns: The list of orders that were cancelled.
-
-    """ 
-    url = orders_url(account_number=account_number)
-    data = request_get(url, 'pagination')
-
-    data = [item for item in data if item['cancel'] is not None]
-
-    for item in data:
-        request_post(item['cancel'])
-
-    print('All Stock Orders Cancelled', file=get_output())
-    return(data)
-
-
-@login_required
-def cancel_all_option_orders(account_number=None):
-    """Cancels all option orders.
-
-    :returns: Returns the order information for the orders that were cancelled.
-
-    """ 
-    url = option_orders_url(account_number=account_number)
-    data = request_get(url, 'pagination')
-
-    data = [item for item in data if item['cancel_url'] is not None]
-
-    for item in data:
-        request_post(item['cancel_url'])
-
-    print('All Option Orders Cancelled', file=get_output())
-    return(data)
-
-
-@login_required
-def cancel_all_crypto_orders():
-    """Cancels all crypto orders.
-
-    :returns: Returns the order information for the orders that were cancelled.
-
-    """ 
-    url = crypto_orders_url()
-    data = request_get(url, 'pagination')
-
-    data = [item for item in data if item['cancel_url'] is not None]
-
-    for item in data:
-        request_post(item['cancel_url'])
-
-    print('All Crypto Orders Cancelled', file=get_output())
-    return(data)
-
-
-@login_required
-def order_buy_market(symbol, quantity, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a market order to be executed immediately.
-
-    :param symbol: The stock ticker of the stock to purchase.
-    :type symbol: str
-    :param quantity: The number of stocks to buy.
-    :type quantity: int
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order(symbol, quantity, "buy", None, None, account_number, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_buy_fractional_by_quantity(symbol, quantity, account_number=None, timeInForce='gfd', extendedHours=False, jsonify=True):
-    """Submits a market order to be executed immediately for fractional shares by specifying the amount that you want to trade.
-    Good for share fractions up to 6 decimal places. Robinhood does not currently support placing limit, stop, or stop loss orders
-    for fractional trades.
-
-    :param symbol: The stock ticker of the stock to purchase.
-    :type symbol: str
-    :param quantity: The amount of the fractional shares you want to buy.
-    :type quantity: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order(symbol, quantity, "buy", None, None, account_number, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_buy_fractional_by_price(symbol, amountInDollars, account_number=None, timeInForce='gfd', extendedHours=False, jsonify=True, market_hours='regular_hours'):
-    """Submits a market order to be executed immediately for fractional shares by specifying the amount in dollars that you want to trade.
-    Good for share fractions up to 6 decimal places. Robinhood does not currently support placing limit, stop, or stop loss orders
-    for fractional trades.
-
-    :param symbol: The stock ticker of the stock to purchase.
-    :type symbol: str
-    :param amountInDollars: The amount in dollars of the fractional shares you want to buy.
-    :type amountInDollars: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    if amountInDollars < 1:
-        print("ERROR: Fractional share price should meet minimum 1.00.", file=get_output())
-        return None
-
-    # turn the money amount into decimal number of shares
-    price = next(iter(get_latest_price(symbol, 'ask_price', extendedHours)), 0.00)
-    fractional_shares = 0 if (price == 0.00) else round_price(amountInDollars/float(price))
+"""STATELESS orders functions - NO GLOBAL STATE"""
+
+from typing import Dict, List, Any, Optional, Union
+from .helper import _make_request, id_for_option
+
+# STATELESS REPLACEMENTS for all order functions - NO MORE BLOCKING!
+
+def _get_account_url(access_token: str) -> Optional[str]:
+    """Get the account URL for the authenticated user"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('GET', 'https://robinhood.com/accounts/', headers=headers)
+    if response and 'results' in response and response['results']:
+        return response['results'][0]['url']
+    return None
+
+def _get_crypto_account_url(access_token: str) -> Optional[str]:
+    """Get the crypto account URL for the authenticated user"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('GET', 'https://nummus.robinhood.com/accounts/', headers=headers)
+    if response and 'results' in response and response['results']:
+        return response['results'][0]['url']
+    return None
+
+def cancel_all_crypto_orders(access_token: str) -> bool:
+    """Cancel all crypto orders - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    orders = get_all_crypto_orders(access_token)
     
-    return order(symbol, fractional_shares, "buy", None, None, account_number, timeInForce, extendedHours, jsonify, market_hours)
+    for order in orders:
+        if order.get('state') in ['queued', 'unconfirmed']:
+            order_id = order.get('id')
+            if order_id:
+                _make_request('POST', f'https://nummus.robinhood.com/orders/{order_id}/cancel/', headers=headers)
+    
+    return True
 
+def cancel_all_option_orders(access_token: str) -> bool:
+    """Cancel all option orders - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    orders = get_all_option_orders(access_token)
+    
+    for order in orders:
+        if order.get('state') == 'queued':
+            order_id = order.get('id')
+            if order_id:
+                _make_request('POST', f'https://robinhood.com/options/orders/{order_id}/cancel/', headers=headers)
+    
+    return True
 
-@login_required
-def order_buy_limit(symbol, quantity, limitPrice, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a limit order to be executed once a certain price is reached.
+def cancel_all_stock_orders(access_token: str) -> bool:
+    """Cancel all stock orders - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    orders = get_all_stock_orders(access_token)
+    
+    for order in orders:
+        if order.get('state') == 'queued':
+            order_id = order.get('id')
+            if order_id:
+                _make_request('POST', f'https://robinhood.com/orders/{order_id}/cancel/', headers=headers)
+    
+    return True
 
-    :param symbol: The stock ticker of the stock to purchase.
-    :type symbol: str
-    :param quantity: The number of stocks to buy.
-    :type quantity: int
-    :param limitPrice: The price to trigger the buy order.
-    :type limitPrice: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
+def cancel_crypto_order(access_token: str, order_id: str) -> bool:
+    """Cancel crypto order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('POST', f'https://nummus.robinhood.com/orders/{order_id}/cancel/', headers=headers)
+    return response is not None
 
-    """ 
-    return order(symbol, quantity, "buy", limitPrice, None, account_number, timeInForce, extendedHours, jsonify)
+def cancel_option_order(access_token: str, order_id: str) -> bool:
+    """Cancel option order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('POST', f'https://robinhood.com/options/orders/{order_id}/cancel/', headers=headers)
+    return response is not None
 
+def cancel_stock_order(access_token: str, order_id: str) -> bool:
+    """Cancel stock order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('POST', f'https://robinhood.com/orders/{order_id}/cancel/', headers=headers)
+    return response is not None
 
-@login_required
-def order_buy_stop_loss(symbol, quantity, stopPrice, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a stop order to be turned into a market order once a certain stop price is reached.
+def find_stock_orders(access_token: str, **kwargs) -> List[Dict[str, Any]]:
+    """Find stock orders with filters - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('GET', 'https://robinhood.com/orders/', headers=headers, params=kwargs)
+    if response and 'results' in response:
+        return response['results']
+    return []
 
-    :param symbol: The stock ticker of the stock to purchase.
-    :type symbol: str
-    :param quantity: The number of stocks to buy.
-    :type quantity: int
-    :param stopPrice: The price to trigger the market order.
-    :type stopPrice: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
+def get_all_crypto_orders(access_token: str) -> List[Dict[str, Any]]:
+    """Get all crypto orders - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('GET', 'https://nummus.robinhood.com/orders/', headers=headers)
+    if response and 'results' in response:
+        return response['results']
+    return []
 
-    """ 
-    return order(symbol, quantity, "buy", None, stopPrice, account_number, timeInForce, extendedHours, jsonify)
+def get_all_open_crypto_orders(access_token: str) -> List[Dict[str, Any]]:
+    """Get all open crypto orders - STATELESS VERSION"""
+    orders = get_all_crypto_orders(access_token)
+    return [order for order in orders if order.get('state') in ['queued', 'unconfirmed']]
 
+def get_all_open_option_orders(access_token: str) -> List[Dict[str, Any]]:
+    """Get all open option orders - STATELESS VERSION"""
+    orders = get_all_option_orders(access_token)
+    return [order for order in orders if order.get('state') == 'queued']
 
-@login_required
-def order_buy_stop_limit(symbol, quantity, limitPrice, stopPrice, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a stop order to be turned into a limit order once a certain stop price is reached.
+def get_all_open_stock_orders(access_token: str) -> List[Dict[str, Any]]:
+    """Get all open stock orders - STATELESS VERSION"""
+    orders = get_all_stock_orders(access_token)
+    return [order for order in orders if order.get('state') == 'queued']
 
-    :param symbol: The stock ticker of the stock to purchase.
-    :type symbol: str
-    :param quantity: The number of stocks to buy.
-    :type quantity: int
-    :param limitPrice: The price to trigger the market order.
-    :type limitPrice: float
-    :param stopPrice: The price to trigger the limit order.
-    :type stopPrice: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
+def get_all_option_orders(access_token: str) -> List[Dict[str, Any]]:
+    """Get all option orders - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('GET', 'https://robinhood.com/options/orders/', headers=headers)
+    if response and 'results' in response:
+        return response['results']
+    return []
 
-    """ 
-    return order(symbol, quantity, "buy", limitPrice, stopPrice, account_number, timeInForce, extendedHours, jsonify)
+def get_all_stock_orders(access_token: str) -> List[Dict[str, Any]]:
+    """Get all stock orders - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('GET', 'https://robinhood.com/orders/', headers=headers)
+    if response and 'results' in response:
+        return response['results']
+    return []
 
+def get_crypto_order_info(access_token: str, order_id: str) -> Optional[Dict]:
+    """Get crypto order info - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    return _make_request('GET', f'https://nummus.robinhood.com/orders/{order_id}/', headers=headers)
 
-@login_required
-def order_buy_trailing_stop(symbol, quantity, trailAmount, trailType='percentage', timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a trailing stop buy order to be turned into a market order when traling stop price reached.
+def get_option_order_info(access_token: str, order_id: str) -> Optional[Dict]:
+    """Get option order info - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    return _make_request('GET', f'https://robinhood.com/options/orders/{order_id}/', headers=headers)
 
-    :param symbol: The stock ticker of the stock to buy.
-    :type symbol: str
-    :param quantity: The number of stocks to buy.
-    :type quantity: int
-    :param trailAmount: how much to trail by; could be percentage or dollar value depending on trailType
-    :type trailAmount: float
-    :param trailType: could be "amount" or "percentage"
-    :type trailType: str
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
+def get_stock_order_info(access_token: str, order_id: str) -> Optional[Dict]:
+    """Get stock order info - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    return _make_request('GET', f'https://robinhood.com/orders/{order_id}/', headers=headers)
 
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-    """
-    return order_trailing_stop(symbol, quantity, "buy", trailAmount, trailType, None, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_sell_market(symbol, quantity, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a market order to be executed immediately.
-
-    :param symbol: The stock ticker of the stock to sell.
-    :type symbol: str
-    :param quantity: The number of stocks to sell.
-    :type quantity: int
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order(symbol, quantity, "sell", None, None, account_number, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_sell_fractional_by_quantity(symbol, quantity, account_number=None, timeInForce='gfd', priceType='bid_price', extendedHours=False, jsonify=True, market_hours='regular_hours'):
-    """Submits a market order to be executed immediately for fractional shares by specifying the amount that you want to trade.
-    Good for share fractions up to 6 decimal places. Robinhood does not currently support placing limit, stop, or stop loss orders
-    for fractional trades.
-
-    :param symbol: The stock ticker of the stock to purchase.
-    :type symbol: str
-    :param quantity: The amount of the fractional shares you want to buy.
-    :type quantity: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order(symbol, quantity, "sell", None, None, account_number, timeInForce, extendedHours, jsonify, market_hours)
-
-
-@login_required
-def order_sell_fractional_by_price(symbol, amountInDollars, account_number=None, timeInForce='gfd', extendedHours=False, jsonify=True):
-    """Submits a market order to be executed immediately for fractional shares by specifying the amount in dollars that you want to trade.
-    Good for share fractions up to 6 decimal places. Robinhood does not currently support placing limit, stop, or stop loss orders
-    for fractional trades.
-
-    :param symbol: The stock ticker of the stock to purchase.
-    :type symbol: str
-    :param amountInDollars: The amount in dollars of the fractional shares you want to buy.
-    :type amountInDollars: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    if amountInDollars < 1:
-        print("ERROR: Fractional share price should meet minimum 1.00.", file=get_output())
+def order(access_token: str, symbol: str, quantity: int, side: str, 
+          order_type: str = 'market', price: Optional[float] = None, **kwargs) -> Optional[Dict]:
+    """Generic order function - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get account URL
+    account_url = _get_account_url(access_token)
+    if not account_url:
         return None
-    # turn the money amount into decimal number of shares
-    price = next(iter(get_latest_price(symbol, 'bid_price', extendedHours)), 0.00)
-    fractional_shares = 0 if (price == 0.00) else round_price(amountInDollars/float(price))
-
-    return order(symbol, fractional_shares, "sell", None, None, account_number, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_sell_limit(symbol, quantity, limitPrice, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a limit order to be executed once a certain price is reached.
-
-    :param symbol: The stock ticker of the stock to sell.
-    :type symbol: str
-    :param quantity: The number of stocks to sell.
-    :type quantity: int
-    :param limitPrice: The price to trigger the sell order.
-    :type limitPrice: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order(symbol, quantity, "sell", limitPrice, None, account_number, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_sell_stop_loss(symbol, quantity, stopPrice, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a stop order to be turned into a market order once a certain stop price is reached.
-
-    :param symbol: The stock ticker of the stock to sell.
-    :type symbol: str
-    :param quantity: The number of stocks to sell.
-    :type quantity: int
-    :param stopPrice: The price to trigger the market order.
-    :type stopPrice: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order(symbol, quantity, "sell", None, stopPrice, account_number, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_sell_stop_limit(symbol, quantity, limitPrice, stopPrice, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a stop order to be turned into a limit order once a certain stop price is reached.
-
-    :param symbol: The stock ticker of the stock to sell.
-    :type symbol: str
-    :param quantity: The number of stocks to sell.
-    :type quantity: int
-    :param limitPrice: The price to trigger the market order.
-    :type limitPrice: float
-    :param stopPrice: The price to trigger the limit order.
-    :type stopPrice: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order(symbol, quantity, "sell", limitPrice, stopPrice, account_number, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_sell_trailing_stop(symbol, quantity, trailAmount, trailType='percentage', timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a trailing stop sell order to be turned into a market order when traling stop price reached.
-
-    :param symbol: The stock ticker of the stock to sell.
-    :type symbol: str
-    :param quantity: The number of stocks to sell.
-    :type quantity: int
-    :param trailAmount: how much to trail by; could be percentage or dollar value depending on trailType
-    :type trailAmount: float
-    :param trailType: could be "amount" or "percentage"
-    :type trailType: str
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-    """
-    return order_trailing_stop(symbol, quantity, "sell", trailAmount, trailType, None, timeInForce, extendedHours, jsonify)
-
-
-@login_required
-def order_trailing_stop(symbol, quantity, side, trailAmount, trailType='percentage', account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True):
-    """Submits a trailing stop order to be turned into a market order when traling stop price reached.
-
-    :param symbol: The stock ticker of the stock to trade.
-    :type symbol: str
-    :param quantity: The number of stocks to trade.
-    :type quantity: int
-    :param side: buy or sell
-    :type side: str
-    :param trailAmount: how much to trail by; could be percentage or dollar value depending on trailType
-    :type trailAmount: float
-    :param trailType: could be "amount" or "percentage"
-    :type trailType: str
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: Optional[str]
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """
-    try:
-        symbol = symbol.upper().strip()
-        trailAmount = float(trailAmount)
-    except AttributeError as message:
-        print(message)
+    
+    # Get instrument
+    instrument_response = _make_request('GET', 'https://robinhood.com/instruments/', 
+                                      headers=headers, params={'symbol': symbol})
+    
+    if not instrument_response or not instrument_response.get('results'):
         return None
-
-    stock_price = round_price(get_latest_price(symbol, extendedHours)[0])
-
-    # find stop price based on whether trailType is "amount" or "percentage" and whether its buy or sell
-    percentage = 0
-    try:
-        if trailType == 'amount':
-            margin = trailAmount
-        else:
-            margin = stock_price * trailAmount * 0.01
-            percentage = trailAmount
-    except Exception as e:
-        print('ERROR: {}'.format(e))
-        return None
-
-    stopPrice = stock_price + margin if side == "buy" else stock_price - margin
-    stopPrice = round_price(stopPrice)
-
+    
+    instrument_url = instrument_response['results'][0]['url']
+    
     payload = {
-        'account': load_account_profile(account_number=account_number, info='url'),
-        'instrument': get_instruments_by_symbols(symbol, info='url')[0],
+        'account': account_url,
+        'instrument': instrument_url,
         'symbol': symbol,
-        'quantity': quantity,
-        'ref_id': str(uuid4()),
+        'side': side,
+        'quantity': str(quantity),
+        'type': order_type,
+        'time_in_force': 'gfd',
+        'trigger': 'immediate'
+    }
+    
+    if price and order_type == 'limit':
+        payload['price'] = str(price)
+    
+    payload.update(kwargs)
+    
+    return _make_request('POST', 'https://robinhood.com/orders/', headers=headers, json=payload)
+
+# Market order functions
+def order_buy_market(access_token: str, symbol: str, quantity: int) -> Optional[Dict]:
+    """Buy market order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'buy', 'market')
+
+def order_sell_market(access_token: str, symbol: str, quantity: int) -> Optional[Dict]:
+    """Sell market order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'sell', 'market')
+
+# Limit order functions
+def order_buy_limit(access_token: str, symbol: str, quantity: int, price: float) -> Optional[Dict]:
+    """Buy limit order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'buy', 'limit', price)
+
+def order_sell_limit(access_token: str, symbol: str, quantity: int, price: float) -> Optional[Dict]:
+    """Sell limit order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'sell', 'limit', price)
+
+# Stop-loss order functions
+def order_buy_stop_loss(access_token: str, symbol: str, quantity: int, stop_price: float) -> Optional[Dict]:
+    """Buy stop-loss order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'buy', 'market', trigger='stop', stop_price=str(stop_price))
+
+def order_sell_stop_loss(access_token: str, symbol: str, quantity: int, stop_price: float) -> Optional[Dict]:
+    """Sell stop-loss order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'sell', 'market', trigger='stop', stop_price=str(stop_price))
+
+# Stop-limit order functions  
+def order_buy_stop_limit(access_token: str, symbol: str, quantity: int, price: float, stop_price: float) -> Optional[Dict]:
+    """Buy stop-limit order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'buy', 'limit', price, trigger='stop', stop_price=str(stop_price))
+
+def order_sell_stop_limit(access_token: str, symbol: str, quantity: int, price: float, stop_price: float) -> Optional[Dict]:
+    """Sell stop-limit order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'sell', 'limit', price, trigger='stop', stop_price=str(stop_price))
+
+# Trailing stop functions
+def order_buy_trailing_stop(access_token: str, symbol: str, quantity: int, trailing_pct: float) -> Optional[Dict]:
+    """Buy trailing stop order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'buy', 'market', trigger='stop', trailing_pct=str(trailing_pct))
+
+def order_sell_trailing_stop(access_token: str, symbol: str, quantity: int, trailing_pct: float) -> Optional[Dict]:
+    """Sell trailing stop order - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'sell', 'market', trigger='stop', trailing_pct=str(trailing_pct))
+
+# Fractional order functions
+def order_buy_fractional_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
+    """Buy fractional shares by dollar amount - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get account URL
+    account_url = _get_account_url(access_token)
+    if not account_url:
+        return None
+    
+    instrument_response = _make_request('GET', 'https://robinhood.com/instruments/', 
+                                      headers=headers, params={'symbol': symbol})
+    
+    if not instrument_response or not instrument_response.get('results'):
+        return None
+    
+    instrument_url = instrument_response['results'][0]['url']
+    
+    payload = {
+        'account': account_url,
+        'instrument': instrument_url,
+        'symbol': symbol,
+        'side': 'buy',
+        'dollar_based_amount': str(amount),
         'type': 'market',
-        'stop_price': stopPrice,
-        'time_in_force': timeInForce,
-        'trigger': 'stop',
-        'side': side,
-        'extended_hours': extendedHours
+        'time_in_force': 'gfd'
     }
+    
+    return _make_request('POST', 'https://robinhood.com/orders/', headers=headers, json=payload)
 
-    if side == "buy":
-        # price should be greater than stopPrice, adding a 5% threshold
-        payload['price'] = round_price(stopPrice * 1.05)
-
-    if trailType == 'amount':
-        payload['trailing_peg'] = {'type': 'price', 'price': {'amount': trailAmount, 'currency_code': 'USD'}}
-    else:
-        payload['trailing_peg'] = {'type': 'percentage', 'percentage': str(percentage)}
-
-    url = orders_url(account_number=account_number)
-    data = request_post(url, payload, json=True, jsonify_data=jsonify)
-
-    return (data)
-
-
-@login_required
-def order(symbol, quantity, side, limitPrice=None, stopPrice=None, account_number=None, timeInForce='gtc', extendedHours=False, jsonify=True, market_hours='regular_hours'):
-    """A generic order function.
-
-    :param symbol: The stock ticker of the stock to sell.
-    :type symbol: str
-    :param quantity: The number of stocks to sell.
-    :type quantity: int
-    :param side: Either 'buy' or 'sell'
-    :type side: str
-    :param limitPrice: The price to trigger the market order.
-    :type limitPrice: float
-    :param stopPrice: The price to trigger the limit or market order.
-    :type stopPrice: float
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day.
-    :type timeInForce: str
-    :param extendedHours: Premium users only. Allows trading during extended hours. Should be true or false.
-    :type extendedHours: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the purchase or selling of stocks, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    try:
-        symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
+def order_sell_fractional_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
+    """Sell fractional shares by dollar amount - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get account URL
+    account_url = _get_account_url(access_token)
+    if not account_url:
         return None
-
-    orderType = "market"
-    trigger = "immediate"
-
-    if side == "buy":
-        priceType = "ask_price"
-    else:
-        priceType = "bid_price"
-
-    if limitPrice and stopPrice:
-        price = round_price(limitPrice)
-        stopPrice = round_price(stopPrice)
-        orderType = "limit"
-        trigger = "stop"
-    elif limitPrice:
-        price = round_price(limitPrice)
-        orderType = "limit"
-    elif stopPrice:
-        stopPrice = round_price(stopPrice)
-        if side == "buy":
-            price = stopPrice
-        else:
-            price = None
-        trigger = "stop"
-    else:
-        price = round_price(next(iter(get_latest_price(symbol, priceType, extendedHours)), 0.00))
-        
-    from datetime import datetime
+    
+    instrument_response = _make_request('GET', 'https://robinhood.com/instruments/', 
+                                      headers=headers, params={'symbol': symbol})
+    
+    if not instrument_response or not instrument_response.get('results'):
+        return None
+    
+    instrument_url = instrument_response['results'][0]['url']
+    
     payload = {
-        'account': load_account_profile(account_number=account_number, info='url'),
-        'instrument': get_instruments_by_symbols(symbol, info='url')[0],
+        'account': account_url,
+        'instrument': instrument_url,
         'symbol': symbol,
-        'price': price,
-        'ask_price': round_price(next(iter(get_latest_price(symbol, "ask_price", extendedHours)), 0.00)),
-        'bid_ask_timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'),
-        'bid_price': round_price(next(iter(get_latest_price(symbol, "bid_price", extendedHours)), 0.00)),
-        'quantity': quantity,
-        'ref_id': str(uuid4()),
-        'type': orderType,
-        'stop_price': stopPrice,
-        'time_in_force': timeInForce,
-        'trigger': trigger,
-        'side': side,
-        'market_hours': market_hours, # choices are ['regular_hours', 'all_day_hours', 'extended_hours']
-        'extended_hours': extendedHours,
-        'order_form_version': 4
+        'side': 'sell',
+        'dollar_based_amount': str(amount),
+        'type': 'market',
+        'time_in_force': 'gfd'
     }
-    # adjust market orders
-    if orderType == 'market':
-        if trigger != "stop":
-            del payload['stop_price']
-        # if market_hours == 'regular_hours': 
-        #     del payload['extended_hours'] 
-        
-    if market_hours == 'regular_hours':
-        if side == "buy":
-            payload['preset_percent_limit'] = "0.05"
-            payload['type'] = 'limit' 
-        # regular market sell
-        elif orderType == 'market' and side == 'sell':
-            del payload['price']   
-    elif market_hours in ('extended_hours', 'all_day_hours'):
-        payload['type'] = 'limit' 
-        payload['quantity']=int(payload['quantity']) # round to integer instead of fractional
-        
-    url = orders_url(account_number=account_number)
-    # print(payload)
-    data = request_post(url, payload, jsonify_data=jsonify)
+    
+    return _make_request('POST', 'https://robinhood.com/orders/', headers=headers, json=payload)
 
-    return(data)
+def order_buy_fractional_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
+    """Buy fractional shares by quantity - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'buy', 'market')
 
+def order_sell_fractional_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
+    """Sell fractional shares by quantity - STATELESS VERSION"""
+    return order(access_token, symbol, quantity, 'sell', 'market')
 
-@login_required
-def order_option_credit_spread(price, symbol, quantity, spread, timeInForce='gtc', account_number=None, jsonify=True):
-    """Submits a limit order for an option credit spread.
-
-    :param price: The limit price to trigger a sell of the option.
-    :type price: float
-    :param symbol: The stock ticker of the stock to trade.
-    :type symbol: str
-    :param quantity: The number of options to sell.
-    :type quantity: int
-    :param spread: A dictionary of spread options with the following keys: \n
-        - expirationDate: The expiration date of the option in 'YYYY-MM-DD' format.\n
-        - strike: The strike price of the option.\n
-        - optionType: This should be 'call' or 'put'.\n
-        - effect: This should be 'open' or 'close'.\n
-        - action: This should be 'buy' or 'sell'.
-    :type spread: dict
-    :param timeInForce: Changes how long the order will be in effect for. \
-     'gtc' = good until cancelled. \
-     'gfd' = good for the day. 'ioc' = immediate or cancel. 'opg' = execute at opening.
-    :type timeInForce: Optional[str]
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the trading of options, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-    """
-    return(order_option_spread("credit", price, symbol, quantity, spread, timeInForce, account_number, jsonify))
-
-
-@login_required
-def order_option_debit_spread(price, symbol, quantity, spread, timeInForce='gtc', account_number=None, jsonify=True):
-    """Submits a limit order for an option debit spread.
-
-    :param price: The limit price to trigger a sell of the option.
-    :type price: float
-    :param symbol: The stock ticker of the stock to trade.
-    :type symbol: str
-    :param quantity: The number of options to sell.
-    :type quantity: int
-    :param spread: A dictionary of spread options with the following keys: \n
-        - expirationDate: The expiration date of the option in 'YYYY-MM-DD' format.\n
-        - strike: The strike price of the option.\n
-        - optionType: This should be 'call' or 'put'.\n
-        - effect: This should be 'open' or 'close'.\n
-        - action: This should be 'buy' or 'sell'.
-    :type spread: dict
-    :param timeInForce: Changes how long the order will be in effect for.
-     'gtc' = good until cancelled. \
-     'gfd' = good for the day. 'ioc' = immediate or cancel. 'opg' execute at opening.
-    :type timeInForce: Optional[str]
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the trading of options, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-    """
-    return(order_option_spread("debit", price, symbol, quantity, spread, timeInForce, account_number, jsonify))
-
-
-@login_required
-def order_option_spread(direction, price, symbol, quantity, spread, account_number=None, timeInForce='gtc', jsonify=True):
-    """Submits a limit order for an option spread. i.e. place a debit / credit spread
-
-    :param direction: Can be "credit" or "debit".
-    :type direction: str
-    :param price: The limit price to trigger a trade of the option.
-    :type price: float
-    :param symbol: The stock ticker of the stock to trade.
-    :type symbol: str
-    :param quantity: The number of options to trade.
-    :type quantity: int
-    :param spread: A dictionary of spread options with the following keys: \n
-        - expirationDate: The expiration date of the option in 'YYYY-MM-DD' format.\n
-        - strike: The strike price of the option.\n
-        - optionType: This should be 'call' or 'put'.\n
-        - effect: This should be 'open' or 'close'.\n
-        - action: This should be 'buy' or 'sell'.
-    :type spread: dict
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for.
-     'gtc' = good until cancelled. \
-     'gfd' = good for the day. 'ioc' = immediate or cancel. 'opg' execute at opening.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the trading of options, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-    """ 
-    try:
-        symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
+# Crypto order functions  
+def order_buy_crypto_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
+    """Buy crypto by dollar amount - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get crypto account URL
+    account_url = _get_crypto_account_url(access_token)
+    if not account_url:
         return None
-    legs = []
-    for each in spread:
-        optionID = id_for_option(symbol,
-                                        each['expirationDate'],
-                                        each['strike'],
-                                        each['optionType'])
-        legs.append({'position_effect': each['effect'],
-                     'side': each['action'],
-                     'ratio_quantity': each['ratio_quantity'],
-                     'option': option_instruments_url(optionID)})
-
+    
     payload = {
-        'account': load_account_profile(account_number=account_number, info='url'),
+        'account': account_url,
+        'currency_pair_id': symbol,  # Would need to resolve crypto pair ID
+        'price': str(amount),
+        'side': 'buy',
+        'time_in_force': 'gtc',
+        'type': 'market'
+    }
+    
+    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+
+def order_sell_crypto_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
+    """Sell crypto by dollar amount - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get crypto account URL
+    account_url = _get_crypto_account_url(access_token)
+    if not account_url:
+        return None
+    
+    payload = {
+        'account': account_url,
+        'currency_pair_id': symbol,  # Would need to resolve crypto pair ID
+        'price': str(amount),
+        'side': 'sell',
+        'time_in_force': 'gtc',
+        'type': 'market'
+    }
+    
+    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+
+def order_buy_crypto_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
+    """Buy crypto by quantity - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get crypto account URL
+    account_url = _get_crypto_account_url(access_token)
+    if not account_url:
+        return None
+    
+    payload = {
+        'account': account_url,
+        'currency_pair_id': symbol,
+        'quantity': str(quantity),
+        'side': 'buy',
+        'time_in_force': 'gtc',
+        'type': 'market'
+    }
+    
+    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+
+def order_sell_crypto_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
+    """Sell crypto by quantity - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get crypto account URL
+    account_url = _get_crypto_account_url(access_token)
+    if not account_url:
+        return None
+    
+    payload = {
+        'account': account_url,
+        'currency_pair_id': symbol,
+        'quantity': str(quantity),
+        'side': 'sell',
+        'time_in_force': 'gtc',
+        'type': 'market'
+    }
+    
+    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+
+def order_crypto(access_token: str, symbol: str, side: str, quantity: Optional[float] = None, 
+                price: Optional[float] = None, order_type: str = 'market') -> Optional[Dict]:
+    """Generic crypto order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get crypto account URL
+    account_url = _get_crypto_account_url(access_token)
+    if not account_url:
+        return None
+    
+    payload = {
+        'account': account_url,
+        'currency_pair_id': symbol,
+        'side': side,
+        'time_in_force': 'gtc',
+        'type': order_type
+    }
+    
+    if quantity:
+        payload['quantity'] = str(quantity)
+    if price:
+        payload['price'] = str(price)
+    
+    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+
+def order_buy_crypto_limit(access_token: str, symbol: str, quantity: float, price: float) -> Optional[Dict]:
+    """Buy crypto limit order - STATELESS VERSION"""
+    return order_crypto(access_token, symbol, 'buy', quantity=quantity, price=price, order_type='limit')
+
+def order_sell_crypto_limit(access_token: str, symbol: str, quantity: float, price: float) -> Optional[Dict]:
+    """Sell crypto limit order - STATELESS VERSION"""
+    return order_crypto(access_token, symbol, 'sell', quantity=quantity, price=price, order_type='limit')
+
+def order_buy_crypto_limit_by_price(access_token: str, symbol: str, amount: float, price: float) -> Optional[Dict]:
+    """Buy crypto limit by dollar amount - STATELESS VERSION"""
+    return order_crypto(access_token, symbol, 'buy', price=amount, order_type='limit')
+
+def order_sell_crypto_limit_by_price(access_token: str, symbol: str, amount: float, price: float) -> Optional[Dict]:
+    """Sell crypto limit by dollar amount - STATELESS VERSION"""
+    return order_crypto(access_token, symbol, 'sell', price=amount, order_type='limit')
+
+# ============================================================================
+# OPTION ORDER FUNCTIONS - STATELESS IMPLEMENTATIONS
+# ============================================================================
+
+def order_buy_option_limit(access_token: str, symbol: str, expiration_date: str, strike: float, 
+                          option_type: str, quantity: int, price: float) -> Optional[Dict]:
+    """Buy option limit order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get account URL
+    account_url = _get_account_url(access_token)
+    if not account_url:
+        return None
+    
+    # Get option instrument ID
+    option_id = id_for_option(access_token, symbol, expiration_date, strike, option_type)
+    if not option_id:
+        return None
+    
+    payload = {
+        'account': account_url,
+        'direction': 'debit',
+        'time_in_force': 'gfd',
+        'legs': [
+            {
+                'side': 'buy',
+                'option': f'https://robinhood.com/options/instruments/{option_id}/',
+                'position_effect': 'open',
+                'ratio_quantity': 1
+            }
+        ],
+        'type': 'limit',
+        'trigger': 'immediate',
+        'quantity': str(quantity),
+        'price': str(price)
+    }
+    
+    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+
+def order_sell_option_limit(access_token: str, symbol: str, expiration_date: str, strike: float, 
+                           option_type: str, quantity: int, price: float) -> Optional[Dict]:
+    """Sell option limit order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get account URL
+    account_url = _get_account_url(access_token)
+    if not account_url:
+        return None
+    
+    # Get option instrument ID
+    option_id = id_for_option(access_token, symbol, expiration_date, strike, option_type)
+    if not option_id:
+        return None
+    
+    payload = {
+        'account': account_url,
+        'direction': 'credit',
+        'time_in_force': 'gfd',
+        'legs': [
+            {
+                'side': 'sell',
+                'option': f'https://robinhood.com/options/instruments/{option_id}/',
+                'position_effect': 'close',
+                'ratio_quantity': 1
+            }
+        ],
+        'type': 'limit',
+        'trigger': 'immediate',
+        'quantity': str(quantity),
+        'price': str(price)
+    }
+    
+    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+
+def order_buy_option_stop_limit(access_token: str, symbol: str, expiration_date: str, strike: float, 
+                               option_type: str, quantity: int, price: float, stop_price: float) -> Optional[Dict]:
+    """Buy option stop limit order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get account URL
+    account_url = _get_account_url(access_token)
+    if not account_url:
+        return None
+    
+    # Get option instrument ID
+    option_id = id_for_option(access_token, symbol, expiration_date, strike, option_type)
+    if not option_id:
+        return None
+    
+    payload = {
+        'account': account_url,
+        'direction': 'debit',
+        'time_in_force': 'gfd',
+        'legs': [
+            {
+                'side': 'buy',
+                'option': f'https://robinhood.com/options/instruments/{option_id}/',
+                'position_effect': 'open',
+                'ratio_quantity': 1
+            }
+        ],
+        'type': 'limit',
+        'trigger': 'stop',
+        'quantity': str(quantity),
+        'price': str(price),
+        'stop_price': str(stop_price)
+    }
+    
+    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+
+def order_sell_option_stop_limit(access_token: str, symbol: str, expiration_date: str, strike: float, 
+                                option_type: str, quantity: int, price: float, stop_price: float) -> Optional[Dict]:
+    """Sell option stop limit order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get account URL
+    account_url = _get_account_url(access_token)
+    if not account_url:
+        return None
+    
+    # Get option instrument ID
+    option_id = id_for_option(access_token, symbol, expiration_date, strike, option_type)
+    if not option_id:
+        return None
+    
+    payload = {
+        'account': account_url,
+        'direction': 'credit',
+        'time_in_force': 'gfd',
+        'legs': [
+            {
+                'side': 'sell',
+                'option': f'https://robinhood.com/options/instruments/{option_id}/',
+                'position_effect': 'close',
+                'ratio_quantity': 1
+            }
+        ],
+        'type': 'limit',
+        'trigger': 'stop',
+        'quantity': str(quantity),
+        'price': str(price),
+        'stop_price': str(stop_price)
+    }
+    
+    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+
+def order_option_spread(access_token: str, symbol: str, expiration_date: str, 
+                       buy_strike: float, sell_strike: float, option_type: str, 
+                       quantity: int, price: float, direction: str = 'debit') -> Optional[Dict]:
+    """Generic option spread order - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    # Get account URL
+    account_url = _get_account_url(access_token)
+    if not account_url:
+        return None
+    
+    # Get option instrument IDs
+    buy_option_id = id_for_option(access_token, symbol, expiration_date, buy_strike, option_type)
+    sell_option_id = id_for_option(access_token, symbol, expiration_date, sell_strike, option_type)
+    
+    if not buy_option_id or not sell_option_id:
+        return None
+    
+    payload = {
+        'account': account_url,
         'direction': direction,
-        'time_in_force': timeInForce,
-        'legs': legs,
-        'type': 'limit',
-        'trigger': 'immediate',
-        'price': price,
-        'quantity': quantity,
-        'override_day_trade_checks': False,
-        'override_dtbp_checks': False,
-        'ref_id': str(uuid4()),
-    }
-
-    url = option_orders_url(account_number=account_number)
-    data = request_post(url, payload, json=True, jsonify_data=jsonify)
-
-    return(data)
-
-
-@login_required
-def order_buy_option_limit(positionEffect, creditOrDebit, price, symbol, quantity, expirationDate, strike, optionType='both', account_number=None, timeInForce='gtc', jsonify=True):
-    """Submits a limit order for an option. i.e. place a long call or a long put.
-
-    :param positionEffect: Either 'open' for a buy to open effect or 'close' for a buy to close effect.
-    :type positionEffect: str
-    :param creditOrDebit: Either 'debit' or 'credit'.
-    :type creditOrDebit: str
-    :param price: The limit price to trigger a buy of the option.
-    :type price: float
-    :param symbol: The stock ticker of the stock to trade.
-    :type symbol: str
-    :param quantity: The number of options to buy.
-    :type quantity: int
-    :param expirationDate: The expiration date of the option in 'YYYY-MM-DD' format.
-    :type expirationDate: str
-    :param strike: The strike price of the option.
-    :type strike: float
-    :param optionType: This should be 'call' or 'put'
-    :type optionType: str
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day. 'ioc' = immediate or cancel. 'opg' execute at opening.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the buying of options, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    try:
-        symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
-        return None
-
-    optionID = id_for_option(symbol, expirationDate, strike, optionType)
-
-    payload = {
-        'account': load_account_profile(account_number=account_number, info='url'),
-        'direction': creditOrDebit,
-        'time_in_force': timeInForce,
+        'time_in_force': 'gfd',
         'legs': [
-            {'position_effect': positionEffect, 'side': 'buy',
-                'ratio_quantity': 1, 'option': option_instruments_url(optionID)},
+            {
+                'side': 'buy',
+                'option': f'https://robinhood.com/options/instruments/{buy_option_id}/',
+                'position_effect': 'open',
+                'ratio_quantity': 1
+            },
+            {
+                'side': 'sell', 
+                'option': f'https://robinhood.com/options/instruments/{sell_option_id}/',
+                'position_effect': 'open',
+                'ratio_quantity': 1
+            }
         ],
         'type': 'limit',
         'trigger': 'immediate',
-        'price': price,
-        'quantity': quantity,
-        'override_day_trade_checks': False,
-        'override_dtbp_checks': False,
-        'ref_id': str(uuid4()),
+        'quantity': str(quantity),
+        'price': str(price)
     }
-
-    url = option_orders_url(account_number=account_number)
-    # print(payload)
-    data = request_post(url, payload, json=True, jsonify_data=jsonify)
-
-    return(data)
-
-
-@login_required
-def order_buy_option_stop_limit(positionEffect, creditOrDebit, limitPrice, stopPrice, symbol, quantity, expirationDate, strike, optionType='both', account_number=None, timeInForce='gtc', jsonify=True):
-    """Submits a stop order to be turned into a limit order once a certain stop price is reached.
-
-    :param positionEffect: Either 'open' for a buy to open effect or 'close' for a buy to close effect.
-    :type positionEffect: str
-    :param creditOrDebit: Either 'debit' or 'credit'.
-    :type creditOrDebit: str
-    :param limitPrice: The limit price to trigger a buy of the option.
-    :type limitPrice: float
-    :param stopPrice: The price to trigger the limit order.
-    :type stopPrice: float
-    :param symbol: The stock ticker of the stock to trade.
-    :type symbol: str
-    :param quantity: The number of options to buy.
-    :type quantity: int
-    :param expirationDate: The expiration date of the option in 'YYYY-MM-DD' format.
-    :type expirationDate: str
-    :param strike: The strike price of the option.
-    :type strike: float
-    :param optionType: This should be 'call' or 'put'
-    :type optionType: str
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day. 'ioc' = immediate or cancel. 'opg' execute at opening.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the buying of options, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    try:
-        symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
-        return None
-
-    optionID = id_for_option(symbol, expirationDate, strike, optionType)
-
-    payload = {
-        'account': load_account_profile(account_number=account_number, info='url'),
-        'direction': creditOrDebit,
-        'time_in_force': timeInForce,
-        'legs': [
-            {'position_effect': positionEffect, 'side': 'buy',
-                'ratio_quantity': 1, 'option': option_instruments_url(optionID)},
-        ],
-        'type': 'limit',
-        'trigger': 'stop',
-        'price': limitPrice,
-        'stop_price': stopPrice,
-        'quantity': quantity,
-        'override_day_trade_checks': False,
-        'override_dtbp_checks': False,
-        'ref_id': str(uuid4()),
-    }
-
-    url = option_orders_url(account_number=account_number)
-    data = request_post(url, payload, json=True, jsonify_data=jsonify)
-
-    return(data)
-
-
-def order_sell_option_stop_limit(positionEffect, creditOrDebit, limitPrice, stopPrice, symbol, quantity, expirationDate, strike, optionType='both', account_number=None, timeInForce='gtc', jsonify=True):
-    """Submits a stop order to be turned into a limit order once a certain stop price is reached.
-
-    :param positionEffect: Either 'open' for a buy to open effect or 'close' for a buy to close effect.
-    :type positionEffect: str
-    :param creditOrDebit: Either 'debit' or 'credit'.
-    :type creditOrDebit: str
-    :param limitPrice: The limit price to trigger a buy of the option.
-    :type limitPrice: float
-    :param stopPrice: The price to trigger the limit order.
-    :type stopPrice: float
-    :param symbol: The stock ticker of the stock to trade.
-    :type symbol: str
-    :param quantity: The number of options to buy.
-    :type quantity: int
-    :param expirationDate: The expiration date of the option in 'YYYY-MM-DD' format.
-    :type expirationDate: str
-    :param strike: The strike price of the option.
-    :type strike: float
-    :param optionType: This should be 'call' or 'put'
-    :type optionType: str
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day. 'ioc' = immediate or cancel. 'opg' execute at opening.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the buying of options, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    try:
-        symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
-        return None
-
-    optionID = id_for_option(symbol, expirationDate, strike, optionType)
-
-    payload = {
-        'account': load_account_profile(account_number=account_number, info='url'),
-        'direction': creditOrDebit,
-        'time_in_force': timeInForce,
-        'legs': [
-            {'position_effect': positionEffect, 'side': 'sell',
-                'ratio_quantity': 1, 'option': option_instruments_url(optionID)},
-        ],
-        'type': 'limit',
-        'trigger': 'stop',
-        'price': limitPrice,
-        'stop_price': stopPrice,
-        'quantity': quantity,
-        'override_day_trade_checks': False,
-        'override_dtbp_checks': False,
-        'ref_id': str(uuid4()),
-    }
-
-    url = option_orders_url(account_number=account_number)
-    data = request_post(url, payload, json=True, jsonify_data=jsonify)
-
-    return(data)
-
-
-@login_required
-def order_sell_option_limit(positionEffect, creditOrDebit, price, symbol, quantity, expirationDate, strike, optionType='both', account_number=None, timeInForce='gtc', jsonify=True):
-    """Submits a limit order for an option. i.e. place a short call or a short put.
-
-    :param positionEffect: Either 'open' for a sell to open effect or 'close' for a sell to close effect.
-    :type positionEffect: str
-    :param creditOrDebit: Either 'debit' or 'credit'.
-    :type creditOrDebit: str
-    :param price: The limit price to trigger a sell of the option.
-    :type price: float
-    :param symbol: The stock ticker of the stock to trade.
-    :type symbol: str
-    :param quantity: The number of options to sell.
-    :type quantity: int
-    :param expirationDate: The expiration date of the option in 'YYYY-MM-DD' format.
-    :type expirationDate: str
-    :param strike: The strike price of the option.
-    :type strike: float
-    :param optionType: This should be 'call' or 'put'
-    :type optionType: str
-    :param account_number: the robinhood account number.
-    :type account_number: Optional[str]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled. \
-    'gfd' = good for the day. 'ioc' = immediate or cancel. 'opg' execute at opening.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of options, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """
-    try:
-        symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
-        return None
-
-    optionID = id_for_option(symbol, expirationDate, strike, optionType)
-
-    payload = {
-        'account': load_account_profile(account_number=account_number, info='url'),
-        'direction': creditOrDebit,
-        'time_in_force': timeInForce,
-        'legs': [
-            {'position_effect': positionEffect, 'side': 'sell',
-                'ratio_quantity': 1, 'option': option_instruments_url(optionID)},
-        ],
-        'type': 'limit',
-        'trigger': 'immediate',
-        'price': price,
-        'quantity': quantity,
-        'override_day_trade_checks': False,
-        'override_dtbp_checks': False,
-        'ref_id': str(uuid4()),
-    }
-
-    url = option_orders_url(account_number=account_number)
-    data = request_post(url, payload, json=True, jsonify_data=jsonify)
-
-    return(data)
-
-
-@login_required
-def order_buy_crypto_by_price(symbol, amountInDollars, timeInForce='gtc', jsonify=True):
-    """Submits a market order for a crypto by specifying the amount in dollars that you want to trade.
-    Good for share fractions up to 8 decimal places.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param amountInDollars: The amount in dollars of the crypto you want to buy.
-    :type amountInDollars: float
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the buying of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order_crypto(symbol, "buy", amountInDollars, "price", None, timeInForce, jsonify)
-
-
-@login_required
-def order_buy_crypto_by_quantity(symbol, quantity, timeInForce='gtc', jsonify=True):
-    """Submits a market order for a crypto by specifying the decimal amount of shares to buy.
-    Good for share fractions up to 8 decimal places.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param quantity: The decimal amount of shares to buy.
-    :type quantity: float
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the buying of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order_crypto(symbol, "buy", quantity, "quantity", None, timeInForce, jsonify)
-
-
-@login_required
-def order_buy_crypto_limit(symbol, quantity, limitPrice, timeInForce='gtc', jsonify=True):
-    """Submits a limit order for a crypto by specifying the decimal amount of shares to buy.
-    Good for share fractions up to 8 decimal places.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param quantity: The decimal amount of shares to buy.
-    :type quantity: float
-    :param limitPrice: The limit price to set for the crypto.
-    :type limitPrice: float
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the buying of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order_crypto(symbol, "buy", quantity, "quantity", limitPrice, timeInForce, jsonify)
-
-
-@login_required
-def order_buy_crypto_limit_by_price(symbol, amountInDollars, limitPrice, timeInForce='gtc', jsonify=True):
-    """Submits a limit order for a crypto by specifying the decimal price to buy.
-    Good for share fractions up to 8 decimal places.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param amountInDollars: The amount in dollars of the crypto you want to buy.
-    :type amountInDollars: float
-    :param limitPrice: The limit price to set for the crypto.
-    :type limitPrice: float
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the buying of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """
-    return order_crypto(symbol, "buy", amountInDollars, "price", limitPrice, timeInForce, jsonify)
-
-
-@login_required
-def order_sell_crypto_by_price(symbol, amountInDollars, timeInForce='gtc', jsonify=True):
-    """Submits a market order for a crypto by specifying the amount in dollars that you want to trade.
-    Good for share fractions up to 8 decimal places.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param amountInDollars: The amount in dollars of the crypto you want to sell.
-    :type amountInDollars: float
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order_crypto(symbol, "sell", amountInDollars, "price", None, timeInForce, jsonify)
-
-
-@login_required
-def order_sell_crypto_by_quantity(symbol, quantity, timeInForce='gtc', jsonify=True):
-    """Submits a market order for a crypto by specifying the decimal amount of shares to buy.
-    Good for share fractions up to 8 decimal places.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param quantity: The decimal amount of shares to sell.
-    :type quantity: float
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """ 
-    return order_crypto(symbol, "sell", quantity, "quantity", None, timeInForce, jsonify)
-
-
-@login_required
-def order_sell_crypto_limit(symbol, quantity, limitPrice, timeInForce='gtc', jsonify=True):
-    """Submits a limit order for a crypto by specifying the decimal amount of shares to sell.
-    Good for share fractions up to 8 decimal places.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param quantity: The decimal amount of shares to sell.
-    :type quantity: float
-    :param limitPrice: The limit price to set for the crypto.
-    :type limitPrice: float
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """
-    return order_crypto(symbol, "sell", quantity, "quantity", limitPrice, timeInForce, jsonify)
-
-
-@login_required
-def order_sell_crypto_limit_by_price(symbol, amountInDollars, limitPrice, timeInForce='gtc', jsonify=True):
-    """Submits a limit order for a crypto by specifying the decimal price to sell.
-    Good for share fractions up to 8 decimal places.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param amountInDollars: The amount in dollars of the crypto you want to sell.
-    :type amountInDollars: float
-    :param limitPrice: The limit price to set for the crypto.
-    :type limitPrice: float
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the buying of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """
-    return order_crypto(symbol, "sell", amountInDollars, "price", limitPrice, timeInForce, jsonify)
-
-
-@login_required
-def order_crypto(symbol, side, quantityOrPrice, amountIn="quantity", limitPrice=None, timeInForce="gtc", jsonify=True):
-    """Submits an order for a crypto.
-
-    :param symbol: The crypto ticker of the crypto to trade.
-    :type symbol: str
-    :param side: Either 'buy' or 'sell'
-    :type side: str
-    :param quantityOrPrice: Either the decimal price of shares to trade or the decimal quantity of shares.
-    :type quantityOrPrice: float
-    :param amountIn: If left default value of 'quantity', order will attempt to trade cryptos by the amount of crypto \
-        you want to trade. If changed to 'price', order will attempt to trade cryptos by the price you want to buy or sell.
-    :type amountIn: Optional[str]
-    :param limitPrice: The price to trigger the market order.
-    :type limitPrice: Optional[float]
-    :param timeInForce: Changes how long the order will be in effect for. 'gtc' = good until cancelled.
-    :type timeInForce: Optional[str]
-    :param jsonify: If set to False, function will return the request object which contains status code and headers.
-    :type jsonify: Optional[str]
-    :returns: Dictionary that contains information regarding the selling of crypto, \
-    such as the order id, the state of order (queued, confired, filled, failed, canceled, etc.), \
-    the price, and the quantity.
-
-    """
-    try:
-        symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
-        return None
-
-    crypto_id = get_crypto_id(symbol)
-    orderType = "market"
-
-    if side == "buy":
-        priceType = "ask_price"
+    
+    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+
+def order_option_credit_spread(access_token: str, symbol: str, expiration_date: str, 
+                              short_strike: float, long_strike: float, option_type: str, 
+                              quantity: int, price: float) -> Optional[Dict]:
+    """Option credit spread order - STATELESS VERSION"""
+    # For credit spreads: sell higher strike (short), buy lower strike (long)
+    if option_type.lower() == 'put':
+        # Put credit spread: sell higher strike, buy lower strike
+        return order_option_spread(access_token, symbol, expiration_date, 
+                                 long_strike, short_strike, option_type, 
+                                 quantity, price, direction='credit')
     else:
-        priceType = "bid_price"
+        # Call credit spread: sell lower strike, buy higher strike  
+        return order_option_spread(access_token, symbol, expiration_date, 
+                                 short_strike, long_strike, option_type, 
+                                 quantity, price, direction='credit')
 
-    if limitPrice:
-        price = limitPrice
-        orderType = "limit"
+def order_option_debit_spread(access_token: str, symbol: str, expiration_date: str, 
+                             long_strike: float, short_strike: float, option_type: str, 
+                             quantity: int, price: float) -> Optional[Dict]:
+    """Option debit spread order - STATELESS VERSION"""
+    # For debit spreads: buy higher strike (long), sell lower strike (short)  
+    if option_type.lower() == 'call':
+        # Call debit spread: buy lower strike, sell higher strike
+        return order_option_spread(access_token, symbol, expiration_date, 
+                                 long_strike, short_strike, option_type, 
+                                 quantity, price, direction='debit')
     else:
-        price = round_price(get_crypto_quote_from_id(crypto_id, info=priceType))
-
-    if amountIn == "quantity":
-        quantity = quantityOrPrice
-    else:
-        quantity = round_price(quantityOrPrice/price)
-
-    payload = {
-        'account_id': load_crypto_profile(info="id"),
-        'currency_pair_id': crypto_id,
-        'price': price,
-        'quantity': quantity,
-        'ref_id': str(uuid4()),
-        'side': side,
-        'time_in_force': timeInForce,
-        'type': orderType
-    }
-
-    url = order_crypto_url()
-
-    # This is safe because 'ref_id' guards us from duplicate orders
-    attempts = 3
-    while attempts > 0:
-        data = request_post(url, payload, json=True, jsonify_data=jsonify)
-        if data is not None:
-            break
-
-        attempts -= 1
-
-    return(data)
+        # Put debit spread: buy higher strike, sell lower strike
+        return order_option_spread(access_token, symbol, expiration_date, 
+                                 long_strike, short_strike, option_type, 
+                                 quantity, price, direction='debit')

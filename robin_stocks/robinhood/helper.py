@@ -1,404 +1,327 @@
-"""Contains decorator functions and functions for interacting with global data.
+"""STATELESS helper functions - NO GLOBAL STATE
+
+This module contains useful utility functions that have been converted to stateless versions.
+
+NO STATE. NO SESSIONS. NO FILES. NO PICKLES. NO BULLSHIT.
 """
-from functools import wraps
-
 import requests
-from robin_stocks.robinhood.globals import LOGGED_IN, OUTPUT, SESSION
+from requests import Session
+from typing import Dict, List, Any, Optional, Union
 
 
-def set_login_state(logged_in):
-    """Sets the login state"""
-    global LOGGED_IN
-    LOGGED_IN = logged_in
-
-def set_output(output):
-    """Sets the global output stream"""
-    global OUTPUT
-    OUTPUT = output
-    
-def get_output():
-    """Gets the current global output stream"""
-    global OUTPUT
-    return OUTPUT
-
-def login_required(func):
-    """A decorator for indicating which methods require the user to be logged
-       in."""
-    @wraps(func)
-    def login_wrapper(*args, **kwargs):
-        global LOGGED_IN
-        if not LOGGED_IN:
-            raise Exception('{} can only be called when logged in'.format(
-                func.__name__))
-        return(func(*args, **kwargs))
-    return(login_wrapper)
-
-
-def convert_none_to_string(func):
-    """A decorator for converting a None Type into a blank string"""
-    @wraps(func)
-    def string_wrapper(*args, **kwargs):
-        result = func(*args, **kwargs)
-        if result:
-            return(result)
+def _make_request(method: str, url: str, headers: Dict[str, str] = None, 
+                  data: Dict = None, json: Dict = None, params: Dict = None, 
+                  timeout: int = 16) -> Optional[Dict]:
+    """Pure HTTP request function - no state"""
+    try:
+        session = Session()
+        if headers:
+            session.headers.update(headers)
+        
+        if method.upper() == 'GET':
+            response = session.get(url, params=params, timeout=timeout)
+        elif method.upper() == 'POST':
+            if json:
+                response = session.post(url, json=json, timeout=timeout)
+            else:
+                response = session.post(url, data=data, timeout=timeout)
+        elif method.upper() == 'DELETE':
+            response = session.delete(url, timeout=timeout)
         else:
-            return("")
-    return(string_wrapper)
+            raise ValueError(f"Unsupported method: {method}")
+        
+        response.raise_for_status()
+        return response.json()
+    
+    except Exception as e:
+        print(f"Request failed: {e}")
+        return None
 
+# STATELESS UTILITY FUNCTIONS - These are safe and useful!
 
-def id_for_stock(symbol):
-    """Takes a stock ticker and returns the instrument id associated with the stock.
-
-    :param symbol: The symbol to get the id for.
+def id_for_stock(access_token: str, symbol: str) -> Optional[str]:
+    """Takes a stock ticker and returns the instrument id - STATELESS VERSION
+    
+    :param access_token: The access token for authentication
+    :type access_token: str
+    :param symbol: The symbol to get the id for
     :type symbol: str
-    :returns:  A string that represents the stocks instrument id.
-
+    :returns: A string that represents the stocks instrument id
     """
     try:
         symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
-        return(None)
+    except AttributeError:
+        return None
 
-    url = 'https://api.robinhood.com/instruments/'
-    payload = {'symbol': symbol}
-    data = request_get(url, 'indexzero', payload)
+    headers = {'Authorization': f'Bearer {access_token}'}
+    params = {'symbol': symbol}
+    response = _make_request('GET', 'https://robinhood.com/instruments/', 
+                           headers=headers, params=params)
+    
+    if response and 'results' in response and response['results']:
+        return response['results'][0].get('id')
+    return None
 
-    return(filter_data(data, 'id'))
-
-
-def id_for_chain(symbol):
-    """Takes a stock ticker and returns the chain id associated with a stocks option.
-
-    :param symbol: The symbol to get the id for.
+def id_for_chain(access_token: str, symbol: str) -> Optional[str]:
+    """Takes a stock ticker and returns the chain id for options - STATELESS VERSION
+    
+    :param access_token: The access token for authentication
+    :type access_token: str
+    :param symbol: The symbol to get the chain id for
     :type symbol: str
-    :returns:  A string that represents the stocks options chain id.
-
+    :returns: A string that represents the stocks options chain id
     """
     try:
         symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
-        return(None)
+    except AttributeError:
+        return None
 
-    url = 'https://api.robinhood.com/instruments/'
+    headers = {'Authorization': f'Bearer {access_token}'}
+    params = {'symbol': symbol}
+    response = _make_request('GET', 'https://robinhood.com/instruments/', 
+                           headers=headers, params=params)
+    
+    if response and 'results' in response and response['results']:
+        return response['results'][0].get('tradable_chain_id')
+    return None
 
-    payload = {'symbol': symbol}
-    data = request_get(url, 'indexzero', payload)
-
-    if data:
-        return(data['tradable_chain_id'])
-    else:
-        return(data)
-
-
-def id_for_group(symbol):
-    """Takes a stock ticker and returns the id associated with the group.
-
-    :param symbol: The symbol to get the id for.
+def id_for_group(access_token: str, symbol: str) -> Optional[str]:
+    """Takes a stock ticker and returns the group id - STATELESS VERSION
+    
+    :param access_token: The access token for authentication
+    :type access_token: str
+    :param symbol: The symbol to get the group id for
     :type symbol: str
-    :returns:  A string that represents the stocks group id.
-
+    :returns: A string that represents the stocks group id
     """
     try:
         symbol = symbol.upper().strip()
-    except AttributeError as message:
-        print(message, file=get_output())
-        return(None)
+    except AttributeError:
+        return None
 
-    url = 'https://api.robinhood.com/options/chains/{0}/'.format(
-        id_for_chain(symbol))
-    data = request_get(url)
-    return(data['underlying_instruments'][0]['id'])
+    chain_id = id_for_chain(access_token, symbol)
+    if not chain_id:
+        return None
+    
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('GET', f'https://robinhood.com/options/chains/{chain_id}/', 
+                           headers=headers)
+    
+    if response and 'underlying_instruments' in response and response['underlying_instruments']:
+        return response['underlying_instruments'][0].get('id')
+    return None
 
-
-def id_for_option(symbol, expirationDate, strike, optionType):
-    """Returns the id associated with a specific option order.
-
-    :param symbol: The symbol to get the id for.
+def id_for_option(access_token: str, symbol: str, expiration_date: str, strike: float, option_type: str) -> Optional[str]:
+    """Returns the id for a specific option - STATELESS VERSION
+    
+    :param access_token: The access token for authentication
+    :type access_token: str
+    :param symbol: The symbol to get the option id for
     :type symbol: str
-    :param expirationData: The expiration date as YYYY-MM-DD
-    :type expirationData: str
-    :param strike: The strike price.
-    :type strike: str
-    :param optionType: Either call or put.
-    :type optionType: str
-    :returns:  A string that represents the stocks option id.
-
-    """ 
+    :param expiration_date: The expiration date as YYYY-MM-DD
+    :type expiration_date: str
+    :param strike: The strike price
+    :type strike: float
+    :param option_type: Either 'call' or 'put'
+    :type option_type: str
+    :returns: A string that represents the option id
+    """
     symbol = symbol.upper()
-    chain_id = id_for_chain(symbol)
-    payload = {
+    chain_id = id_for_chain(access_token, symbol)
+    if not chain_id:
+        return None
+    
+    headers = {'Authorization': f'Bearer {access_token}'}
+    params = {
         'chain_id': chain_id,
-        'expiration_dates': expirationDate,
-        'strike_price': strike,
-        'type': optionType,
+        'expiration_dates': expiration_date,
+        'strike_price': str(strike),
+        'type': option_type.lower(),
         'state': 'active'
     }
-    url = 'https://api.robinhood.com/options/instruments/'
-    data = request_get(url, 'pagination', payload)
+    
+    response = _make_request('GET', 'https://robinhood.com/options/instruments/', 
+                           headers=headers, params=params)
+    
+    if response and 'results' in response:
+        # Filter for exact expiration date match
+        matching_options = [item for item in response['results'] 
+                          if item.get("expiration_date") == expiration_date]
+        if matching_options:
+            return matching_options[0]['id']
+    
+    return None
 
-    listOfOptions = [item for item in data if item["expiration_date"] == expirationDate]
-    if (len(listOfOptions) == 0):
-        print('Getting the option ID failed. Perhaps the expiration date is wrong format, or the strike price is wrong.', file=get_output())
-        return(None)
+# PURE UTILITY FUNCTIONS - No API calls, no state, just pure logic
 
-    return(listOfOptions[0]['id'])
-
-
-def round_price(price):
-    """Takes a price and rounds it to an appropriate decimal place that Robinhood will accept.
-
-    :param price: The input price to round.
+def round_price(price: Union[float, int]) -> float:
+    """Takes a price and rounds it to appropriate decimal place for Robinhood - STATELESS VERSION
+    
+    :param price: The input price to round
     :type price: float or int
-    :returns: The rounded price as a float.
-
+    :returns: The rounded price as a float
     """
     price = float(price)
     if price <= 1e-2:
-        returnPrice = round(price, 6)
+        return round(price, 6)
     elif price < 1e0:
-        returnPrice = round(price, 4)
+        return round(price, 4)
     else:
-        returnPrice = round(price, 2)
+        return round(price, 2)
 
-    return returnPrice
-
-
-def filter_data(data, info):
-    """Takes the data and extracts the value for the keyword that matches info.
-
-    :param data: The data returned by request_get.
-    :type data: dict or list
-    :param info: The keyword to filter from the data.
-    :type info: str
-    :returns:  A list or string with the values that correspond to the info keyword.
-
+def filter_data(data: Union[Dict, List, None], info: Optional[str]) -> Any:
+    """Takes data and extracts value for keyword that matches info - STATELESS VERSION
+    
+    :param data: The data to filter
+    :type data: dict or list or None
+    :param info: The keyword to filter from the data
+    :type info: str or None
+    :returns: A list or string with values that correspond to the info keyword
     """
-    if (data == None):
-        return(data)
-    elif (data == [None]):
-        return([])
-    elif (type(data) == list):
-        if (len(data) == 0):
-            return([])
-        compareDict = data[0]
-        noneType = []
-    elif (type(data) == dict):
-        compareDict = data
-        noneType = None
+    if data is None:
+        return data
+    elif data == [None]:
+        return []
+    elif isinstance(data, list):
+        if len(data) == 0:
+            return []
+        compare_dict = data[0]
+        none_type = []
+    elif isinstance(data, dict):
+        compare_dict = data
+        none_type = None
+    else:
+        return data
 
     if info is not None:
-        if info in compareDict and type(data) == list:
-            return([x[info] for x in data])
-        elif info in compareDict and type(data) == dict:
-            return(data[info])
+        if info in compare_dict and isinstance(data, list):
+            return [x.get(info) for x in data if info in x]
+        elif info in compare_dict and isinstance(data, dict):
+            return data[info]
         else:
-            print(error_argument_not_key_in_dictionary(info), file=get_output())
-            return(noneType)
+            return none_type
     else:
-        return(data)
+        return data
 
-
-def inputs_to_set(inputSymbols):
-    """Takes in the parameters passed to *args and puts them in a set and a list.
-    The set will make sure there are no duplicates, and then the list will keep
-    the original order of the input.
-
-    :param inputSymbols: A list, dict, or tuple of stock tickers.
-    :type inputSymbols: list or dict or tuple or str
-    :returns:  A list of strings that have been capitalized and stripped of white space.
-
+def inputs_to_set(input_symbols: Union[str, List, tuple, set]) -> List[str]:
+    """Takes input parameters and puts them in a clean list - STATELESS VERSION
+    
+    :param input_symbols: A list, dict, tuple, or string of stock tickers
+    :type input_symbols: list or dict or tuple or str
+    :returns: A list of strings that have been capitalized and stripped
     """
-
     symbols_list = []
     symbols_set = set()
 
     def add_symbol(symbol):
-        symbol = symbol.upper().strip()
-        if symbol not in symbols_set:
-            symbols_set.add(symbol)
-            symbols_list.append(symbol)
+        if isinstance(symbol, str):
+            symbol = symbol.upper().strip()
+            if symbol not in symbols_set:
+                symbols_set.add(symbol)
+                symbols_list.append(symbol)
 
-    if type(inputSymbols) is str:
-        add_symbol(inputSymbols)
-    elif type(inputSymbols) is list or type(inputSymbols) is tuple or type(inputSymbols) is set:
-        inputSymbols = [comp for comp in inputSymbols if type(comp) is str]
-        for item in inputSymbols:
+    if isinstance(input_symbols, str):
+        add_symbol(input_symbols)
+    elif isinstance(input_symbols, (list, tuple, set)):
+        for item in input_symbols:
             add_symbol(item)
 
-    return(symbols_list)
+    return symbols_list
 
+# STATELESS REQUEST FUNCTIONS - These are the safe replacements for the old stateful versions
 
-def request_document(url, payload=None):
-    """Using a document url, makes a get request and returnes the session data.
-
-    :param url: The url to send a get request to.
+def request_document(access_token: str, url: str, payload: Optional[Dict] = None):
+    """Makes a GET request and returns the JSON response - STATELESS VERSION
+    
+    :param access_token: The access token for authentication
+    :type access_token: str
+    :param url: The url to send a get request to
     :type url: str
-    :returns: Returns the session.get() data as opppose to session.get().json() data.
-
-    """ 
-    try:
-        res = SESSION.get(url, params=payload)
-        res.raise_for_status()
-    except requests.exceptions.HTTPError as message:
-        print(message, file=get_output())
-        return(None)
-
-    return(res)
-
-
-def request_get(url, dataType='regular', payload=None, jsonify_data=True):
-    """For a given url and payload, makes a get request and returns the data.
-
-    :param url: The url to send a get request to.
-    :type url: str
-    :param dataType: Determines how to filter the data. 'regular' returns the unfiltered data. \
-    'results' will return data['results']. 'pagination' will return data['results'] and append it with any \
-    data that is in data['next']. 'indexzero' will return data['results'][0].
-    :type dataType: Optional[str]
-    :param payload: Dictionary of parameters to pass to the url. Will append the requests url as url/?key1=value1&key2=value2.
+    :param payload: Optional parameters to pass to the url
     :type payload: Optional[dict]
-    :param jsonify_data: If this is true, will return requests.post().json(), otherwise will return response from requests.post().
-    :type jsonify_data: bool
-    :returns: Returns the data from the get request. If jsonify_data=True and requests returns an http code other than <200> \
-    then either '[None]' or 'None' will be returned based on what the dataType parameter was set as.
-
+    :returns: Returns the JSON response data
     """
-    if (dataType == 'results' or dataType == 'pagination'):
-        data = [None]
-    else:
-        data = None
-    res = None
-    if jsonify_data:
-        try:
-            res = SESSION.get(url, params=payload)
-            res.raise_for_status()
-            data = res.json()
-        except (requests.exceptions.HTTPError, AttributeError) as message:
-            print(message, file=get_output())
-            return(data)
-    else:
-        res = SESSION.get(url, params=payload)
-        return(res)
-    # Only continue to filter data if jsonify_data=True, and Session.get returned status code <200>.
-    if (dataType == 'results'):
-        try:
-            data = data['results']
-        except KeyError as message:
-            print("{0} is not a key in the dictionary".format(message), file=get_output())
-            return([None])
-    elif (dataType == 'pagination'):
-        counter = 2
-        nextData = data
-        try:
-            data = data['results']
-        except KeyError as message:
-            print("{0} is not a key in the dictionary".format(message), file=get_output())
-            return([None])
+    headers = {'Authorization': f'Bearer {access_token}'}
+    return _make_request('GET', url, headers=headers, params=payload)
 
-        if nextData['next']:
-            print('Found Additional pages.', file=get_output())
-        while nextData['next']:
-            try:
-                res = SESSION.get(nextData['next'])
-                res.raise_for_status()
-                nextData = res.json()
-            except:
-                print('Additional pages exist but could not be loaded.', file=get_output())
-                return(data)
-            print('Loading page '+str(counter)+' ...', file=get_output())
-            counter += 1
-            for item in nextData['results']:
-                data.append(item)
-    elif (dataType == 'indexzero'):
-        try:
-            data = data['results'][0]
-        except KeyError as message:
-            print("{0} is not a key in the dictionary".format(message), file=get_output())
-            return(None)
-        except IndexError as message:
-            return(None)
-
-    return(data)
-
-
-def request_post(url, payload=None, timeout=16, json=False, jsonify_data=True):
-    """For a given url and payload, makes a post request and returns the response. Allows for responses other than 200.
-
-    :param url: The url to send a post request to.
+def request_get(access_token: str, url: str, data_type: str = 'regular', payload: Optional[Dict] = None, jsonify_data: bool = True):
+    """Makes a GET request with various data filtering options - STATELESS VERSION
+    
+    :param access_token: The access token for authentication
+    :type access_token: str
+    :param url: The url to send a get request to
     :type url: str
-    :param payload: Dictionary of parameters to pass to the url as url/?key1=value1&key2=value2.
+    :param data_type: How to filter data ('regular', 'results', 'pagination', 'indexzero')
+    :type data_type: str
+    :param payload: Optional parameters to pass to the url
     :type payload: Optional[dict]
-    :param timeout: The time for the post to wait for a response. Should be slightly greater than multiples of 3.
-    :type timeout: Optional[int]
-    :param json: This will set the 'content-type' parameter of the session header to 'application/json'
-    :type json: bool
-    :param jsonify_data: If this is true, will return requests.post().json(), otherwise will return response from requests.post().
+    :param jsonify_data: Whether to return JSON data (always True in stateless version)
     :type jsonify_data: bool
-    :returns: Returns the data from the post request.
-
+    :returns: Filtered data based on data_type parameter
     """
-    data = None
-    res = None
-    try:
-        if json:
-            update_session('Content-Type', 'application/json')
-            res = SESSION.post(url, json=payload, timeout=timeout)
-            update_session(
-                'Content-Type', 'application/x-www-form-urlencoded; charset=utf-8')
-        else:
-            res = SESSION.post(url, data=payload, timeout=timeout)
-        if res.status_code not in [200, 201, 202, 204, 301, 302, 303, 304, 307, 400, 401, 402, 403]:
-            raise Exception("Received "+ str(res.status_code))
-        data = res.json()
-    except Exception as message:
-        print("Error in request_post: {0}".format(message), file=get_output())
-    if jsonify_data:
-        return(data)
-    else:
-        return(res)
-
-
-def request_delete(url):
-    """For a given url and payload, makes a delete request and returns the response.
-
-    :param url: The url to send a delete request to.
-    :type url: str
-    :returns: Returns the data from the delete request.
-
-    """
-    try:
-        res = SESSION.delete(url)
-        res.raise_for_status()
-        data = res
-    except Exception as message:
-        data = None
-        print("Error in request_delete: {0}".format(message), file=get_output())
+    headers = {'Authorization': f'Bearer {access_token}'}
+    response = _make_request('GET', url, headers=headers, params=payload)
+    
+    if not response:
+        return [None] if data_type in ['results', 'pagination'] else None
+    
+    # Filter data based on data_type
+    if data_type == 'results':
+        return response.get('results', [None])
+    elif data_type == 'pagination':
+        # Handle pagination by following 'next' links
+        all_results = response.get('results', [])
+        next_url = response.get('next')
         
-    return(data)
+        while next_url:
+            next_response = _make_request('GET', next_url, headers=headers)
+            if next_response and 'results' in next_response:
+                all_results.extend(next_response['results'])
+                next_url = next_response.get('next')
+            else:
+                break
+        
+        return all_results
+    elif data_type == 'indexzero':
+        results = response.get('results', [])
+        return results[0] if results else None
+    else:  # data_type == 'regular'
+        return response
 
-
-def update_session(key, value):
-    """Updates the session header used by the requests library.
-
-    :param key: The key value to update or add to session header.
-    :type key: str
-    :param value: The value that corresponds to the key.
-    :type value: str
-    :returns: None. Updates the session header with a value.
-
+def request_post(access_token: str, url: str, payload: Optional[Dict] = None, timeout: int = 16, 
+                json_data: bool = False, jsonify_data: bool = True):
+    """Makes a POST request - STATELESS VERSION
+    
+    :param access_token: The access token for authentication
+    :type access_token: str
+    :param url: The url to send a post request to
+    :type url: str
+    :param payload: Dictionary of parameters to send
+    :type payload: Optional[dict]
+    :param timeout: Request timeout in seconds
+    :type timeout: int
+    :param json_data: Whether to send payload as JSON
+    :type json_data: bool
+    :param jsonify_data: Whether to return JSON data (always True in stateless version)
+    :type jsonify_data: bool
+    :returns: Response data
     """
-    SESSION.headers[key] = value
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    if json_data:
+        headers['Content-Type'] = 'application/json'
+        return _make_request('POST', url, headers=headers, json=payload, timeout=timeout)
+    else:
+        return _make_request('POST', url, headers=headers, data=payload, timeout=timeout)
 
-
-def error_argument_not_key_in_dictionary(keyword):
-    return('Error: The keyword "{0}" is not a key in the dictionary.'.format(keyword))
-
-
-def error_ticker_does_not_exist(ticker):
-    return('Warning: "{0}" is not a valid stock ticker. It is being ignored'.format(ticker))
-
-
-def error_must_be_nonzero(keyword):
-    return('Error: The input parameter "{0}" must be an integer larger than zero and non-negative'.format(keyword))
+def request_delete(access_token: str, url: str):
+    """Makes a DELETE request - STATELESS VERSION
+    
+    :param access_token: The access token for authentication
+    :type access_token: str
+    :param url: The url to send a delete request to
+    :type url: str
+    :returns: Response data
+    """
+    headers = {'Authorization': f'Bearer {access_token}'}
+    return _make_request('DELETE', url, headers=headers)
