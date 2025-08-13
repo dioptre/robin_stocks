@@ -41,7 +41,7 @@ def _make_request(method: str, url: str, headers: Dict[str, str] = None,
 # STATELESS UTILITY FUNCTIONS - These are safe and useful!
 
 def id_for_stock(access_token: str, symbol: str) -> Optional[str]:
-    """Takes a stock ticker and returns the instrument id - STATELESS VERSION
+    """Takes a stock ticker and returns the instrument id - STATELESS VERSION - ENHANCED with indexzero pattern
     
     :param access_token: The access token for authentication
     :type access_token: str
@@ -54,17 +54,13 @@ def id_for_stock(access_token: str, symbol: str) -> Optional[str]:
     except AttributeError:
         return None
 
-    headers = {'Authorization': f'Bearer {access_token}'}
-    params = {'symbol': symbol}
-    response = _make_request('GET', instruments_url(), 
-                           headers=headers, params=params)
-    
-    if response and 'results' in response and response['results']:
-        return response['results'][0].get('id')
-    return None
+    # Use indexzero pattern for cleaner first result access
+    instrument = request_get(access_token, instruments_url(), data_type='indexzero',
+                            payload={'symbol': symbol})
+    return instrument.get('id') if instrument else None
 
 def id_for_chain(access_token: str, symbol: str) -> Optional[str]:
-    """Takes a stock ticker and returns the chain id for options - STATELESS VERSION
+    """Takes a stock ticker and returns the chain id for options - STATELESS VERSION - ENHANCED with indexzero pattern
     
     :param access_token: The access token for authentication
     :type access_token: str
@@ -77,17 +73,13 @@ def id_for_chain(access_token: str, symbol: str) -> Optional[str]:
     except AttributeError:
         return None
 
-    headers = {'Authorization': f'Bearer {access_token}'}
-    params = {'symbol': symbol}
-    response = _make_request('GET', instruments_url(), 
-                           headers=headers, params=params)
-    
-    if response and 'results' in response and response['results']:
-        return response['results'][0].get('tradable_chain_id')
-    return None
+    # Use indexzero pattern for cleaner first result access
+    instrument = request_get(access_token, instruments_url(), data_type='indexzero',
+                            payload={'symbol': symbol})
+    return instrument.get('tradable_chain_id') if instrument else None
 
 def id_for_group(access_token: str, symbol: str) -> Optional[str]:
-    """Takes a stock ticker and returns the group id - STATELESS VERSION
+    """Takes a stock ticker and returns the group id - STATELESS VERSION - ENHANCED with safer array access
     
     :param access_token: The access token for authentication
     :type access_token: str
@@ -108,12 +100,14 @@ def id_for_group(access_token: str, symbol: str) -> Optional[str]:
     response = _make_request('GET', option_chains_by_id_url(chain_id), 
                            headers=headers)
     
-    if response and 'underlying_instruments' in response and response['underlying_instruments']:
-        return response['underlying_instruments'][0].get('id')
+    # Safer array access with indexzero-style pattern
+    if response and 'underlying_instruments' in response:
+        instruments = response['underlying_instruments']
+        return instruments[0].get('id') if instruments else None
     return None
 
 def id_for_option(access_token: str, symbol: str, expiration_date: str, strike: float, option_type: str) -> Optional[str]:
-    """Returns the id for a specific option - STATELESS VERSION
+    """Returns the id for a specific option - STATELESS VERSION - ENHANCED with safer array access
     
     :param access_token: The access token for authentication
     :type access_token: str
@@ -145,11 +139,10 @@ def id_for_option(access_token: str, symbol: str, expiration_date: str, strike: 
                            headers=headers, params=params)
     
     if response and 'results' in response:
-        # Filter for exact expiration date match
+        # Filter for exact expiration date match with safer array access
         matching_options = [item for item in response['results'] 
                           if item.get("expiration_date") == expiration_date]
-        if matching_options:
-            return matching_options[0]['id']
+        return matching_options[0]['id'] if matching_options else None
     
     return None
 

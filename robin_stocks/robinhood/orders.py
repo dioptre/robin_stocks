@@ -1,7 +1,7 @@
 """STATELESS orders functions - NO GLOBAL STATE"""
 
 from typing import Dict, List, Any, Optional, Union
-from .helper import _make_request, id_for_option
+from .helper import _make_request, id_for_option, request_get
 from .urls import (
     account_profile_url, crypto_account_url, crypto_cancel_url, 
     crypto_orders_url, order_crypto_url, option_cancel_url,
@@ -11,21 +11,33 @@ from .urls import (
 
 # STATELESS REPLACEMENTS for all order functions - NO MORE BLOCKING!
 
+# ========================
+# ENHANCED HELPER FUNCTIONS - Using indexzero pattern
+# ========================
+
 def _get_account_url(access_token: str) -> Optional[str]:
-    """Get the account URL for the authenticated user"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', account_profile_url(), headers=headers)
-    if response and 'results' in response and response['results']:
-        return response['results'][0]['url']
-    return None
+    """Get the account URL for the authenticated user - ENHANCED VERSION"""
+    first_account = request_get(access_token, account_profile_url(), data_type='indexzero')
+    return first_account.get('url') if first_account else None
 
 def _get_crypto_account_url(access_token: str) -> Optional[str]:
-    """Get the crypto account URL for the authenticated user"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', crypto_account_url(), headers=headers)
-    if response and 'results' in response and response['results']:
-        return response['results'][0]['url']
-    return None
+    """Get the crypto account URL for the authenticated user - ENHANCED VERSION"""
+    first_crypto_account = request_get(access_token, crypto_account_url(), data_type='indexzero')
+    return first_crypto_account.get('url') if first_crypto_account else None
+
+
+def _get_first_account(access_token: str) -> Optional[Dict[str, Any]]:
+    """Get the full first account object for the authenticated user"""
+    return request_get(access_token, account_profile_url(), data_type='indexzero')
+
+def _get_first_crypto_account(access_token: str) -> Optional[Dict[str, Any]]:
+    """Get the full first crypto account object for the authenticated user"""
+    return request_get(access_token, crypto_account_url(), data_type='indexzero')
+
+def _get_instrument_by_symbol(access_token: str, symbol: str) -> Optional[Dict[str, Any]]:
+    """Get instrument data for a symbol using indexzero pattern"""
+    return request_get(access_token, instruments_url(), data_type='indexzero', 
+                      payload={'symbol': symbol.upper().strip()})
 
 def cancel_all_crypto_orders(access_token: str) -> bool:
     """Cancel all crypto orders - STATELESS VERSION"""

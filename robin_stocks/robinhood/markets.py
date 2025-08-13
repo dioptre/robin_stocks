@@ -1,7 +1,7 @@
 """STATELESS markets functions - NO GLOBAL STATE"""
 
 from typing import Dict, List, Any, Optional
-from .helper import _make_request
+from .helper import _make_request, request_get
 from .urls import (
     movers_sp500_url, get_100_most_popular_url, markets_url,
     market_hours_url, currency_url, market_category_url,
@@ -100,18 +100,15 @@ def get_market_next_open_hours(access_token: str, market: str = 'XNAS', info: Op
     return None
 
 def get_market_next_open_hours_after_date(access_token: str, date_str: str, market: str = 'XNAS', info: Optional[str] = None) -> Optional[Dict]:
-    """Get next market open hours after specific date - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
+    """Get next market open hours after specific date - STATELESS VERSION - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
     params = {'date': date_str}
-    response = _make_request('GET', market_hours_by_market_url(market), 
-                           headers=headers, params=params)
+    next_open = request_get(access_token, market_hours_by_market_url(market), 
+                           data_type='indexzero', payload=params)
     
-    if response and 'results' in response and response['results']:
-        next_open = response['results'][0]
-        if info and info in next_open:
-            return next_open[info]
-        return next_open
-    return None
+    if info and next_open and info in next_open:
+        return next_open[info]
+    return next_open
 
 def get_currency_pairs(access_token: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get currency pairs - STATELESS VERSION"""

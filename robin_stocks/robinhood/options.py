@@ -2,7 +2,7 @@
 
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
-from .helper import _make_request
+from .helper import _make_request, request_get
 from .urls import (
     aggregate_url, option_positions_url, instruments_url, option_instruments_url,
     option_historicals_url, marketdata_options_url, option_chains_url, chains_url
@@ -67,17 +67,16 @@ def get_open_option_positions(access_token: str, info: Optional[str] = None) -> 
     return []
 
 def get_chains(access_token: str, symbol: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Get options chains for symbol - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
+    """Get options chains for symbol - STATELESS VERSION - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
+    instrument = request_get(access_token, instruments_url(), data_type='indexzero',
+                            payload={'symbol': symbol.upper().strip()})
     
-    # First get the instrument
-    instrument_response = _make_request('GET', instruments_url(), 
-                                      headers=headers, params={'symbol': symbol})
-    
-    if not instrument_response or not instrument_response.get('results'):
+    if not instrument:
         return []
     
-    instrument_id = instrument_response['results'][0]['id']
+    instrument_id = instrument.get('id')
+    headers = {'Authorization': f'Bearer {access_token}'}
     response = _make_request('GET', option_chains_url(instrument_id), 
                            headers=headers)
     
@@ -122,9 +121,7 @@ def get_option_historicals(access_token: str, option_id: str, interval: str = '5
 
 def get_option_instrument_data(access_token: str, symbol: str, expiration_date: str, strike: float, 
                               option_type: str, info: Optional[str] = None) -> Optional[Dict]:
-    """Get option instrument data - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    
+    """Get option instrument data - STATELESS VERSION - ENHANCED with indexzero pattern"""
     # Get chains first
     chains = get_chains(access_token, symbol)
     if not chains:
@@ -141,15 +138,13 @@ def get_option_instrument_data(access_token: str, symbol: str, expiration_date: 
         'type': option_type
     }
     
-    response = _make_request('GET', option_instruments_url(), 
-                           headers=headers, params=params)
+    # Use indexzero pattern for cleaner first result access
+    option_data = request_get(access_token, option_instruments_url(), 
+                             data_type='indexzero', payload=params)
     
-    if response and 'results' in response and response['results']:
-        option_data = response['results'][0]
-        if info and info in option_data:
-            return option_data[info]
-        return option_data
-    return None
+    if info and option_data and info in option_data:
+        return option_data[info]
+    return option_data
 
 def get_option_instrument_data_by_id(access_token: str, option_id: str, info: Optional[str] = None) -> Optional[Dict]:
     """Get option instrument data by ID - STATELESS VERSION"""
@@ -189,16 +184,15 @@ def get_chains_by_symbol(access_token: str, symbol: str, info: Optional[str] = N
     return response
 
 def get_option_market_data_by_id(access_token: str, option_id: str, info: Optional[str] = None) -> Optional[Dict]:
-    """Get option market data by ID - STATELESS VERSION"""
-    market_data = get_option_market_data(access_token, [option_id], info)
-    return market_data[0] if market_data else None
+    """Get option market data by ID - STATELESS VERSION - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
+    return request_get(access_token, marketdata_options_url(), data_type='indexzero',
+                      payload={'instruments': option_id})
 
 def find_tradable_options(access_token: str, symbol: str, expiration_date: Optional[str] = None, 
                          strike: Optional[float] = None, option_type: Optional[str] = None, 
                          info: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Find tradable options with filters - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    
+    """Find tradable options with filters - STATELESS VERSION - ENHANCED with indexzero pattern"""
     chains = get_chains(access_token, symbol)
     if not chains:
         return []
@@ -216,6 +210,7 @@ def find_tradable_options(access_token: str, symbol: str, expiration_date: Optio
     if option_type:
         params['type'] = option_type
     
+    headers = {'Authorization': f'Bearer {access_token}'}
     response = _make_request('GET', option_instruments_url(), 
                            headers=headers, params=params)
     

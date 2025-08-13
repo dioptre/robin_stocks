@@ -1,7 +1,7 @@
 """STATELESS crypto functions - NO GLOBAL STATE"""
 
 from typing import Dict, List, Any, Optional, Union
-from .helper import _make_request
+from .helper import _make_request, request_get
 from .urls import (
     crypto_account_url, crypto_holdings_url, crypto_quote_url,
     crypto_currency_pairs_url, crypto_historical_url, crypto_currency_url
@@ -11,11 +11,8 @@ from .urls import (
 
 def load_crypto_profile(access_token: str, info: Optional[str] = None) -> Optional[Dict]:
     """Gets the information associated with the crypto account - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', crypto_account_url(), headers=headers)
-    
-    if response and 'results' in response and response['results']:
-        response = response['results'][0]
+    # Use indexzero pattern for cleaner first result access
+    response = request_get(access_token, crypto_account_url(), data_type='indexzero')
     
     if info and response and info in response:
         return response[info]

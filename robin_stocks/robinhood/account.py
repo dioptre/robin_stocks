@@ -1,7 +1,7 @@
 """STATELESS account functions - NO GLOBAL STATE"""
 
 from typing import Dict, List, Any, Optional
-from .helper import _make_request
+from .helper import _make_request, request_get
 from .urls import (
     phoenix_url, positions_url, account_profile_url, dividends_url,
     banktransfers_url, documents_url, linked_url, margin_url,
@@ -15,6 +15,15 @@ from .urls import (
     cash_management_interest_payments_url, all_watchlists_url,
     notifications_base_url, margin_interest_url
 )
+
+# ========================
+# ENHANCED HELPER FUNCTIONS - Using indexzero pattern  
+# ========================
+
+def _get_account_number(access_token: str) -> Optional[str]:
+    """Get the account number for the authenticated user"""
+    first_account = request_get(access_token, account_profile_url(), data_type='indexzero')
+    return first_account.get('account_number') if first_account else None
 
 
 def load_phoenix_account(access_token: str, info: Optional[str] = None) -> Optional[Dict]:
@@ -46,19 +55,22 @@ def get_positions(access_token: str, nonzero_only: bool = True) -> List[Dict]:
 
 
 def get_account_profile(access_token: str) -> Optional[Dict]:
-    """Get account profile - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', account_profile_url(), headers=headers)
-    
-    if response and 'results' in response and len(response['results']) > 0:
-        return response['results'][0]
-    return response
+    """Get account profile - STATELESS VERSION - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
+    result = request_get(access_token, account_profile_url(), data_type='indexzero')
+    return result if result else _make_request('GET', account_profile_url(), 
+                                              headers={'Authorization': f'Bearer {access_token}'})
 
 
 def get_portfolio_profile(access_token: str) -> Optional[Dict]:
     """Get portfolio profile - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', positions_url(), headers=headers)
+    # First get account number, then get portfolio for that account
+    account_num = _get_account_number(access_token)
+    if account_num:
+        from .urls import portfolio_profile_url
+        headers = {'Authorization': f'Bearer {access_token}'}
+        return _make_request('GET', portfolio_profile_url(account_num), headers=headers)
+    return None
 
 
 def get_watchlists(access_token: str) -> List[Dict]:
@@ -191,11 +203,13 @@ def get_card_transactions(access_token: str) -> List[Dict[str, Any]]:
 
 def get_day_trades(access_token: str) -> List[Dict[str, Any]]:
     """Get day trades - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', accounts_day_trades_url(), headers=headers)
-    if response and 'results' in response:
-        return response['results']
-    return []
+    # Get account number using enhanced helper
+    account_number = _get_account_number(access_token)
+    if not account_number:
+        return []
+    
+    response = request_get(access_token, daytrades_url(account_number), data_type='results')
+    return response if response else []
 
 def get_dividends_by_instrument(access_token: str, instrument_id: str) -> List[Dict[str, Any]]:
     """Get dividends for specific instrument - STATELESS VERSION"""
@@ -215,12 +229,15 @@ def get_documents(access_token: str) -> List[Dict[str, Any]]:
 
 def get_historical_portfolio(access_token: str, interval: str = '5minute', span: str = 'day') -> List[Dict[str, Any]]:
     """Get historical portfolio - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
+    # Get account number using enhanced helper
+    account_number = _get_account_number(access_token)
+    if not account_number:
+        return []
+    
     params = {'interval': interval, 'span': span}
-    response = _make_request('GET', portfolios_historicals_url(), headers=headers, params=params)
-    if response and 'results' in response:
-        return response['results']
-    return []
+    response = request_get(access_token, portfolios_historicals_url(account_number), 
+                          data_type='results', payload=params)
+    return response if response else []
 
 def get_latest_notification(access_token: str) -> Optional[Dict[str, Any]]:
     """Get latest notification - STATELESS VERSION"""

@@ -28,7 +28,7 @@ def portfolio_profile_url(account_number=None):
     if account_number:
         return f'https://api.robinhood.com/accounts/{account_number}/portfolio/'
     else:
-        return 'https://api.robinhood.com/positions/'
+        return 'https://api.robinhood.com/accounts/'
 
 def security_profile_url():
     return 'https://api.robinhood.com/user/additional_info/'

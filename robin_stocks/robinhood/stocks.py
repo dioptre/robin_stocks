@@ -1,7 +1,7 @@
 """Stocks functions - all stateless with access_token parameter"""
 
 from typing import Dict, List, Any, Optional, Union
-from .helper import _make_request
+from .helper import _make_request, request_get
 from .urls import (
     fundamentals_url, events_url, instruments_url, news_url,
     ratings_url, instrument_splits_url, instrument_by_id_url,
@@ -9,9 +9,10 @@ from .urls import (
 )
 
 def find_instrument_data(access_token: str, symbol: str) -> Optional[Dict]:
-    """Find instrument data by symbol"""
-    instruments = get_instruments_by_symbols(access_token, [symbol])
-    return instruments[0] if instruments else None
+    """Find instrument data by symbol - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
+    return request_get(access_token, instruments_url(), data_type='indexzero', 
+                      payload={'symbol': symbol.upper().strip()})
 
 def get_earnings(access_token: str, symbol: str) -> List[Dict]:
     """Get earnings data"""
@@ -73,9 +74,11 @@ def get_latest_price(access_token: str, symbols: Union[str, List[str]]) -> List[
     return [quote.get('last_trade_price', '0.00') for quote in quotes]
 
 def get_name_by_symbol(access_token: str, symbol: str) -> Optional[str]:
-    """Get company name by symbol"""
-    instruments = get_instruments_by_symbols(access_token, [symbol])
-    return instruments[0].get('simple_name') if instruments else None
+    """Get company name by symbol - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
+    instrument = request_get(access_token, instruments_url(), data_type='indexzero',
+                            payload={'symbol': symbol.upper().strip()})
+    return instrument.get('simple_name') if instrument else None
 
 def get_name_by_url(access_token: str, url: str) -> Optional[str]:
     """Get company name by instrument URL"""
@@ -99,10 +102,12 @@ def get_pricebook_by_id(access_token: str, instrument_id: str) -> Optional[Dict]
     return _make_request('GET', instrument_by_id_url(instrument_id), headers=headers)
 
 def get_pricebook_by_symbol(access_token: str, symbol: str) -> Optional[Dict]:
-    """Get price book by symbol"""
-    instruments = get_instruments_by_symbols(access_token, [symbol])
-    if instruments:
-        instrument_id = instruments[0].get('id')
+    """Get price book by symbol - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
+    instrument = request_get(access_token, instruments_url(), data_type='indexzero',
+                            payload={'symbol': symbol.upper().strip()})
+    if instrument:
+        instrument_id = instrument.get('id')
         return get_pricebook_by_id(access_token, instrument_id)
     return None
 
@@ -131,18 +136,17 @@ def get_ratings(access_token: str, symbol: str) -> Dict:
     return response or {}
 
 def get_splits(access_token: str, symbol: str) -> List[Dict]:
-    """Get stock splits (legacy method using instrument_id lookup)"""
-    headers = {'Authorization': f'Bearer {access_token}'}
+    """Get stock splits (legacy method using instrument_id lookup) - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
+    instrument = request_get(access_token, instruments_url(), data_type='indexzero',
+                            payload={'symbol': symbol.upper().strip()})
     
-    # First get instrument
-    instrument_response = _make_request('GET', instruments_url(), 
-                                      headers=headers, params={'symbol': symbol})
-    
-    if not instrument_response or not instrument_response.get('results'):
+    if not instrument:
         return []
     
-    instrument_id = instrument_response['results'][0]['id']
+    instrument_id = instrument.get('id')
     
+    headers = {'Authorization': f'Bearer {access_token}'}
     response = _make_request('GET', instrument_splits_url(instrument_id), 
                            headers=headers)
     
@@ -179,9 +183,10 @@ def get_stock_quote_by_id(access_token: str, instrument_id: str) -> Optional[Dic
     return _make_request('GET', quotes_by_id_url(instrument_id), headers=headers)
 
 def get_stock_quote_by_symbol(access_token: str, symbol: str) -> Optional[Dict]:
-    """Get stock quote by symbol"""
-    quotes = get_quotes(access_token, [symbol])
-    return quotes[0] if quotes else None
+    """Get stock quote by symbol - ENHANCED with indexzero pattern"""
+    # Use indexzero pattern for cleaner first result access
+    return request_get(access_token, quotes_url(), data_type='indexzero',
+                      payload={'symbols': symbol.upper().strip()})
 
 def get_symbol_by_url(access_token: str, url: str) -> Optional[str]:
     """Get symbol by instrument URL"""
