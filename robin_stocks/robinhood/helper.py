@@ -12,8 +12,11 @@ from .urls import instruments_url, option_chains_by_id_url, option_instruments_u
 
 def _make_request(method: str, url: str, headers: Dict[str, str] = None, 
                   data: Dict = None, json: Dict = None, params: Dict = None, 
-                  timeout: int = 16) -> Optional[Dict]:
-    """Pure HTTP request function - no state"""
+                  timeout: int = 16, raise_on_error: bool = True) -> Optional[Dict]:
+    """Pure HTTP request function - no state
+    
+    :param raise_on_error: If True, raise exceptions instead of returning None
+    """
     try:
         session = Session()
         if headers:
@@ -35,7 +38,16 @@ def _make_request(method: str, url: str, headers: Dict[str, str] = None,
         return response.json()
     
     except Exception as e:
-        print(f"Request failed: {e}")
+        error_msg = f"Request failed: {e}"
+        print(error_msg)
+        
+        # Add response details if available
+        if hasattr(e, 'response') and hasattr(e.response, 'text'):
+            error_msg += f" | Response: {e.response.text}"
+            print(f"Response details: {e.response.text}")
+        
+        if raise_on_error:
+            raise Exception(error_msg) from e
         return None
 
 # STATELESS UTILITY FUNCTIONS - These are safe and useful!
@@ -224,7 +236,7 @@ def inputs_to_set(input_symbols: Union[str, List, tuple, set]) -> List[str]:
 
 # STATELESS REQUEST FUNCTIONS - These are the safe replacements for the old stateful versions
 
-def request_document(access_token: str, url: str, payload: Optional[Dict] = None):
+def request_document(access_token: str, url: str, payload: Optional[Dict] = None, raise_on_error: bool = True):
     """Makes a GET request and returns the JSON response - STATELESS VERSION
     
     :param access_token: The access token for authentication
@@ -233,12 +245,14 @@ def request_document(access_token: str, url: str, payload: Optional[Dict] = None
     :type url: str
     :param payload: Optional parameters to pass to the url
     :type payload: Optional[dict]
+    :param raise_on_error: If True, raise exceptions instead of returning None
+    :type raise_on_error: bool
     :returns: Returns the JSON response data
     """
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', url, headers=headers, params=payload)
+    return _make_request('GET', url, headers=headers, params=payload, raise_on_error=raise_on_error)
 
-def request_get(access_token: str, url: str, data_type: str = 'regular', payload: Optional[Dict] = None, jsonify_data: bool = True):
+def request_get(access_token: str, url: str, data_type: str = 'regular', payload: Optional[Dict] = None, jsonify_data: bool = True, raise_on_error: bool = True):
     """Makes a GET request with various data filtering options - STATELESS VERSION
     
     :param access_token: The access token for authentication
@@ -254,7 +268,7 @@ def request_get(access_token: str, url: str, data_type: str = 'regular', payload
     :returns: Filtered data based on data_type parameter
     """
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', url, headers=headers, params=payload)
+    response = _make_request('GET', url, headers=headers, params=payload, raise_on_error=raise_on_error)
     
     if not response:
         return [None] if data_type in ['results', 'pagination'] else None
@@ -268,7 +282,7 @@ def request_get(access_token: str, url: str, data_type: str = 'regular', payload
         next_url = response.get('next')
         
         while next_url:
-            next_response = _make_request('GET', next_url, headers=headers)
+            next_response = _make_request('GET', next_url, headers=headers, raise_on_error=raise_on_error)
             if next_response and 'results' in next_response:
                 all_results.extend(next_response['results'])
                 next_url = next_response.get('next')
@@ -283,7 +297,7 @@ def request_get(access_token: str, url: str, data_type: str = 'regular', payload
         return response
 
 def request_post(access_token: str, url: str, payload: Optional[Dict] = None, timeout: int = 16, 
-                json_data: bool = False, jsonify_data: bool = True):
+                json_data: bool = False, jsonify_data: bool = True, raise_on_error: bool = True):
     """Makes a POST request - STATELESS VERSION
     
     :param access_token: The access token for authentication
@@ -304,18 +318,20 @@ def request_post(access_token: str, url: str, payload: Optional[Dict] = None, ti
     
     if json_data:
         headers['Content-Type'] = 'application/json'
-        return _make_request('POST', url, headers=headers, json=payload, timeout=timeout)
+        return _make_request('POST', url, headers=headers, json=payload, timeout=timeout, raise_on_error=raise_on_error)
     else:
-        return _make_request('POST', url, headers=headers, data=payload, timeout=timeout)
+        return _make_request('POST', url, headers=headers, data=payload, timeout=timeout, raise_on_error=raise_on_error)
 
-def request_delete(access_token: str, url: str):
+def request_delete(access_token: str, url: str, raise_on_error: bool = True):
     """Makes a DELETE request - STATELESS VERSION
     
     :param access_token: The access token for authentication
     :type access_token: str
     :param url: The url to send a delete request to
     :type url: str
+    :param raise_on_error: If True, raise exceptions instead of returning None
+    :type raise_on_error: bool
     :returns: Response data
     """
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('DELETE', url, headers=headers)
+    return _make_request('DELETE', url, headers=headers, raise_on_error=raise_on_error)
