@@ -39,12 +39,36 @@ def _make_request(method: str, url: str, headers: Dict[str, str] = None,
     
     except Exception as e:
         error_msg = f"Request failed: {e}"
-        print(error_msg)
+        print(f"ROBINHOOD HTTP ERROR: {error_msg}")
         
-        # Add response details if available
-        if hasattr(e, 'response') and hasattr(e.response, 'text'):
-            error_msg += f" | Response: {e.response.text}"
-            print(f"Response details: {e.response.text}")
+        # Add comprehensive response details if available
+        if hasattr(e, 'response') and e.response is not None:
+            response = e.response
+            print(f"ROBINHOOD HTTP ERROR: Status Code: {response.status_code}")
+            print(f"ROBINHOOD HTTP ERROR: Response Headers: {dict(response.headers)}")
+            print(f"ROBINHOOD HTTP ERROR: Response Text: {response.text}")
+            
+            # Log the request details too
+            print(f"ROBINHOOD HTTP ERROR: Request URL: {response.url}")
+            print(f"ROBINHOOD HTTP ERROR: Request Method: {method}")
+            if headers:
+                # Don't log authorization tokens for security
+                safe_headers = {k: ("***REDACTED***" if "authorization" in k.lower() else v) for k, v in headers.items()}
+                print(f"ROBINHOOD HTTP ERROR: Request Headers: {safe_headers}")
+            
+            error_msg += f" | Status: {response.status_code} | Response: {response.text[:500]}..."
+            
+            # Check for specific error patterns
+            if response.status_code == 400:
+                print("ROBINHOOD HTTP ERROR: 400 Bad Request - Check order parameters")
+            elif response.status_code == 401:
+                print("ROBINHOOD HTTP ERROR: 401 Unauthorized - Check access token")
+            elif response.status_code == 403:
+                print("ROBINHOOD HTTP ERROR: 403 Forbidden - Insufficient permissions")
+            elif response.status_code == 404:
+                print("ROBINHOOD HTTP ERROR: 404 Not Found - Check URL/endpoint")
+            elif response.status_code >= 500:
+                print("ROBINHOOD HTTP ERROR: Server error - Robinhood API issue")
         
         if raise_on_error:
             raise Exception(error_msg) from e

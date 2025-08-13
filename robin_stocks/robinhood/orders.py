@@ -1,7 +1,7 @@
 """STATELESS orders functions - NO GLOBAL STATE"""
 
 from typing import Dict, List, Any, Optional, Union
-from .helper import _make_request, id_for_option, request_get
+from .helper import _make_request, id_for_option, request_get, round_price
 from .urls import (
     account_profile_url, crypto_account_url, crypto_cancel_url, 
     crypto_orders_url, order_crypto_url, option_cancel_url,
@@ -158,8 +158,9 @@ def get_stock_order_info(access_token: str, order_id: str) -> Optional[Dict]:
     headers = {'Authorization': f'Bearer {access_token}'}
     return _make_request('GET', orders_url(order_id), headers=headers)
 
-def order(access_token: str, symbol: str, quantity: int, side: str, 
-          order_type: str = 'market', price: Optional[float] = None, **kwargs) -> Optional[Dict]:
+def order(access_token: str, symbol: str, quantity: Union[int, float], side: str, 
+          order_type: str = 'market', price: Optional[float] = None, stop_price: Optional[float] = None,
+          time_in_force: str = 'gfd', market_hours: str = 'regular_hours', **kwargs) -> Optional[Dict]:
     """Generic order function - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
@@ -177,27 +178,65 @@ def order(access_token: str, symbol: str, quantity: int, side: str,
     
     instrument_url = instrument_response['results'][0]['url']
     
+    # Get current quote data for required fields (like original robin-stocks)
+    from .stocks import get_quotes
+    quote_data = get_quotes(access_token, [symbol])
+    if not quote_data or len(quote_data) == 0:
+        return None
+        
+    quote = quote_data[0]
+    ask_price = float(quote.get('ask_price', 0.0))
+    bid_price = float(quote.get('bid_price', 0.0))
+    current_price = float(quote.get('last_trade_price', ask_price))
+    
+    # Generate unique reference ID like original
+    import uuid
+    ref_id = str(uuid.uuid4())
+    
+    # Get current timestamp
+    from datetime import datetime
+    timestamp = datetime.now().isoformat()
+    
+    # Build payload with all required fields like original robin-stocks
     payload = {
         'account': account_url,
         'instrument': instrument_url,
         'symbol': symbol,
-        'side': side,
+        'price': str(round_price(current_price)),
+        'ask_price': str(round_price(ask_price)),
+        'bid_price': str(round_price(bid_price)),
+        'bid_ask_timestamp': timestamp,
         'quantity': str(quantity),
+        'ref_id': ref_id,
         'type': order_type,
-        'time_in_force': 'gfd',
-        'trigger': 'immediate'
+        'time_in_force': time_in_force,
+        'trigger': 'immediate',
+        'side': side,
+        'market_hours': market_hours,
+        'extended_hours': market_hours != 'regular_hours',
+        'order_form_version': 4
     }
     
+    # Add limit price if specified
     if price and order_type == 'limit':
-        payload['price'] = str(price)
+        payload['price'] = str(round_price(price))
+        
+    # Add stop price if specified  
+    if stop_price:
+        payload['stop_price'] = str(round_price(stop_price))
+        payload['trigger'] = 'stop'
     
+    # Add any additional kwargs
     payload.update(kwargs)
+    
+    # Debug output
+    print(f"ROBINHOOD PAYLOAD DEBUG: Full order payload for {symbol}: {payload}")
     
     return _make_request('POST', orders_url(), headers=headers, json=payload)
 
 # Market order functions
-def order_buy_market(access_token: str, symbol: str, quantity: int) -> Optional[Dict]:
-    """Buy market order - STATELESS VERSION"""
+def order_buy_market(access_token: str, symbol: str, quantity: Union[int, float]) -> Optional[Dict]:
+    """Buy market order - STATELESS VERSION (supports fractional shares)"""
     return order(access_token, symbol, quantity, 'buy', 'market')
 
 def order_sell_market(access_token: str, symbol: str, quantity: int) -> Optional[Dict]:
@@ -242,33 +281,37 @@ def order_sell_trailing_stop(access_token: str, symbol: str, quantity: int, trai
 
 # Fractional order functions
 def order_buy_fractional_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
-    """Buy fractional shares by dollar amount - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    
-    # Get account URL
-    account_url = _get_account_url(access_token)
-    if not account_url:
+    """Buy fractional shares by dollar amount - STATELESS VERSION (matching original robin-stocks)"""
+    if amount < 1:
+        print(f"ERROR: Fractional share price should meet minimum 1.00, got {amount}")
         return None
-    
-    instrument_response = _make_request('GET', instruments_url(), 
-                                      headers=headers, params={'symbol': symbol})
-    
-    if not instrument_response or not instrument_response.get('results'):
+
+    # Get current ask price like the original implementation
+    from .stocks import get_quotes
+    try:
+        quote_data = get_quotes(access_token, [symbol])
+        if not quote_data or len(quote_data) == 0:
+            print(f"ERROR: Could not get quote data for {symbol}")
+            return None
+            
+        ask_price = float(quote_data[0].get('ask_price', 0.0))
+        if ask_price == 0.0:
+            print(f"ERROR: Invalid ask price for {symbol}")
+            return None
+            
+        # Calculate fractional shares like the original
+        from .helper import round_price
+        fractional_shares = round_price(amount / ask_price)
+        
+        print(f"ROBINHOOD DEBUG: Converting ${amount} to {fractional_shares} shares at ${ask_price} ask price")
+        
+        # Use the standard order function like the original implementation
+        return order(access_token, symbol, fractional_shares, 'buy', 'market', 
+                    time_in_force='gfd', market_hours='regular_hours')
+        
+    except Exception as e:
+        print(f"ERROR: Failed to process fractional order for {symbol}: {e}")
         return None
-    
-    instrument_url = instrument_response['results'][0]['url']
-    
-    payload = {
-        'account': account_url,
-        'instrument': instrument_url,
-        'symbol': symbol,
-        'side': 'buy',
-        'dollar_based_amount': str(amount),
-        'type': 'market',
-        'time_in_force': 'gfd'
-    }
-    
-    return _make_request('POST', orders_url(), headers=headers, json=payload)
 
 def order_sell_fractional_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
     """Sell fractional shares by dollar amount - STATELESS VERSION"""
@@ -300,8 +343,10 @@ def order_sell_fractional_by_price(access_token: str, symbol: str, amount: float
     return _make_request('POST', orders_url(), headers=headers, json=payload)
 
 def order_buy_fractional_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
-    """Buy fractional shares by quantity - STATELESS VERSION"""
-    return order(access_token, symbol, quantity, 'buy', 'market')
+    """Buy fractional shares by quantity - STATELESS VERSION (matching original robin-stocks)"""
+    # Use the standard order function like the original implementation
+    return order(access_token, symbol, quantity, 'buy', 'market', 
+                time_in_force='gfd', market_hours='regular_hours')
 
 def order_sell_fractional_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
     """Sell fractional shares by quantity - STATELESS VERSION"""
