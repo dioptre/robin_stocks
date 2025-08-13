@@ -36,7 +36,7 @@ def security_profile_url():
 def user_profile_url():
     return 'https://api.robinhood.com/user/'
 
-def portfolis_historicals_url(account_number):
+def portfolios_historicals_url(account_number):
     return f'https://api.robinhood.com/portfolios/historicals/{account_number}/'
 
 # Stocks
@@ -184,8 +184,11 @@ def watchlists_url(name=None, add=False):
     else:
         return 'https://api.robinhood.com/midlands/lists/default/'
 
-# Markets
+# Markets  
 def currency_url():
+    return 'https://nummus.robinhood.com/currency_pairs/'
+
+def crypto_currency_pairs_url():
     return 'https://nummus.robinhood.com/currency_pairs/'
 
 def markets_url():
@@ -277,13 +280,16 @@ def crypto_currency_pairs_url():
     return 'https://nummus.robinhood.com/currency_pairs/'
 
 def crypto_quote_url(crypto_id):
-    return f'https://nummus.robinhood.com/currencies/{crypto_id}/quote/'
+    return f'https://api.robinhood.com/marketdata/forex/quotes/{crypto_id}/'
 
 def crypto_holdings_url():
+    return 'https://nummus.robinhood.com/holdings/'
+
+def crypto_positions_url():
     return 'https://nummus.robinhood.com/positions/'
 
 def crypto_historical_url(crypto_id):
-    return f'https://nummus.robinhood.com/currencies/{crypto_id}/historicals/'
+    return f'https://api.robinhood.com/marketdata/forex/historicals/{crypto_id}/'
 
 def crypto_currency_url(symbol):
     return f'https://nummus.robinhood.com/currencies/{symbol}/'

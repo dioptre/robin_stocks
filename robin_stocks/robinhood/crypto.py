@@ -32,8 +32,20 @@ def get_crypto_positions(access_token: str, info: Optional[str] = None) -> List[
 
 def get_crypto_quote(access_token: str, symbol: str, info: Optional[str] = None) -> Optional[Dict]:
     """Get crypto quote by symbol - STATELESS VERSION"""
+    # First, get the currency pair ID for this symbol
+    pairs = get_crypto_currency_pairs(access_token)
+    pair_id = None
+    
+    for pair in pairs:
+        if pair.get('asset_currency', {}).get('code') == symbol.upper():
+            pair_id = pair.get('id')
+            break
+    
+    if not pair_id:
+        return None
+        
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', crypto_quote_url(symbol), headers=headers)
+    response = _make_request('GET', crypto_quote_url(pair_id), headers=headers)
     
     if info and response and info in response:
         return response[info]
@@ -63,6 +75,18 @@ def get_crypto_currency_pairs(access_token: str, info: Optional[str] = None) -> 
 def get_crypto_historicals(access_token: str, symbol: str, interval: str = '5minute', 
                           span: str = 'day', bounds: str = '24_7', info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get crypto historical data - STATELESS VERSION"""
+    # First, get the currency pair ID for this symbol
+    pairs = get_crypto_currency_pairs(access_token)
+    pair_id = None
+    
+    for pair in pairs:
+        if pair.get('asset_currency', {}).get('code') == symbol.upper():
+            pair_id = pair.get('id')
+            break
+    
+    if not pair_id:
+        return []
+        
     headers = {'Authorization': f'Bearer {access_token}'}
     
     params = {
@@ -71,7 +95,7 @@ def get_crypto_historicals(access_token: str, symbol: str, interval: str = '5min
         'bounds': bounds
     }
     
-    response = _make_request('GET', crypto_historical_url(symbol), 
+    response = _make_request('GET', crypto_historical_url(pair_id), 
                            headers=headers, params=params)
     
     if response and 'data_points' in response:

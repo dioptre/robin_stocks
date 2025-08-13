@@ -280,38 +280,47 @@ def order_sell_trailing_stop(access_token: str, symbol: str, quantity: int, trai
     return order(access_token, symbol, quantity, 'sell', 'market', trigger='stop', trailing_pct=str(trailing_pct))
 
 # Fractional order functions
-def order_buy_fractional_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
-    """Buy fractional shares by dollar amount - STATELESS VERSION (matching original robin-stocks)"""
-    if amount < 1:
-        print(f"ERROR: Fractional share price should meet minimum 1.00, got {amount}")
+def order_buy_fractional_by_price(access_token: str, symbol: str, amount_in_dollars: float, 
+                                  account_number: Optional[str] = None, time_in_force: str = 'gfd',
+                                  extended_hours: bool = False, market_hours: str = 'regular_hours') -> Optional[Dict]:
+    """Submits a market order to be executed immediately for fractional shares by specifying the amount in dollars.
+    
+    :param access_token: The access token for authentication
+    :param symbol: The stock ticker of the stock to purchase
+    :param amount_in_dollars: The amount in dollars of the fractional shares you want to buy
+    :param account_number: the robinhood account number (optional)
+    :param time_in_force: Changes how long the order will be in effect for. 'gfd' = good for the day
+    :param extended_hours: Premium users only. Allows trading during extended hours
+    :param market_hours: Market hours setting ('regular_hours' or 'extended_hours')
+    :returns: Dictionary containing order information
+    """
+    if amount_in_dollars < 1:
+        print(f"ERROR: Fractional share price should meet minimum 1.00, got {amount_in_dollars}")
         return None
 
-    # Get current ask price like the original implementation
+    # Get the current ask price to calculate fractional shares (matching GitHub implementation)
     from .stocks import get_quotes
-    try:
-        quote_data = get_quotes(access_token, [symbol])
-        if not quote_data or len(quote_data) == 0:
-            print(f"ERROR: Could not get quote data for {symbol}")
-            return None
-            
-        ask_price = float(quote_data[0].get('ask_price', 0.0))
-        if ask_price == 0.0:
-            print(f"ERROR: Invalid ask price for {symbol}")
-            return None
-            
-        # Calculate fractional shares like the original
-        from .helper import round_price
-        fractional_shares = round_price(amount / ask_price)
-        
-        print(f"ROBINHOOD DEBUG: Converting ${amount} to {fractional_shares} shares at ${ask_price} ask price")
-        
-        # Use the standard order function like the original implementation
-        return order(access_token, symbol, fractional_shares, 'buy', 'market', 
-                    time_in_force='gfd', market_hours='regular_hours')
-        
-    except Exception as e:
-        print(f"ERROR: Failed to process fractional order for {symbol}: {e}")
+    quotes = get_quotes(access_token, [symbol])
+    
+    if not quotes or not quotes[0]:
+        print(f"ERROR: Could not get quote for {symbol}")
         return None
+    
+    quote = quotes[0]
+    ask_price = float(quote.get('ask_price', 0.0))
+    
+    if ask_price == 0.0:
+        print(f"ERROR: Invalid ask price for {symbol}")
+        return None
+    
+    # Calculate fractional shares (matching GitHub logic)
+    fractional_shares = round_price(amount_in_dollars / ask_price)
+    
+    print(f"ROBINHOOD DEBUG: {symbol} ask_price=${ask_price}, amount=${amount_in_dollars}, fractional_shares={fractional_shares}")
+    
+    # Use the generic order function like the GitHub version
+    return order(access_token, symbol, fractional_shares, 'buy', 'market', 
+                time_in_force=time_in_force, market_hours=market_hours)
 
 def order_sell_fractional_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
     """Sell fractional shares by dollar amount - STATELESS VERSION"""
@@ -353,7 +362,7 @@ def order_sell_fractional_by_quantity(access_token: str, symbol: str, quantity: 
     return order(access_token, symbol, quantity, 'sell', 'market')
 
 # Crypto order functions  
-def order_buy_crypto_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
+def order_buy_crypto_by_price(access_token: str, symbol: str, amount_in_dollars: float) -> Optional[Dict]:
     """Buy crypto by dollar amount - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
@@ -365,7 +374,7 @@ def order_buy_crypto_by_price(access_token: str, symbol: str, amount: float) -> 
     payload = {
         'account': account_url,
         'currency_pair_id': symbol,  # Would need to resolve crypto pair ID
-        'price': str(amount),
+        'price': str(amount_in_dollars),
         'side': 'buy',
         'time_in_force': 'gtc',
         'type': 'market'
