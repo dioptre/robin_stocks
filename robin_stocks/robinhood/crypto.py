@@ -2,13 +2,17 @@
 
 from typing import Dict, List, Any, Optional, Union
 from .helper import _make_request
+from .urls import (
+    crypto_account_url, crypto_holdings_url, crypto_quote_url,
+    crypto_currency_pairs_url, crypto_historical_url, crypto_currency_url
+)
 
 # STATELESS REPLACEMENTS for all crypto functions - NO MORE BLOCKING!
 
 def load_crypto_profile(access_token: str, info: Optional[str] = None) -> Optional[Dict]:
     """Gets the information associated with the crypto account - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://nummus.robinhood.com/accounts/', headers=headers)
+    response = _make_request('GET', crypto_account_url(), headers=headers)
     
     if response and 'results' in response and response['results']:
         response = response['results'][0]
@@ -20,7 +24,7 @@ def load_crypto_profile(access_token: str, info: Optional[str] = None) -> Option
 def get_crypto_positions(access_token: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns crypto positions for the account - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://nummus.robinhood.com/positions/', headers=headers)
+    response = _make_request('GET', crypto_holdings_url(), headers=headers)
     
     if response and 'results' in response:
         positions = response['results']
@@ -32,7 +36,7 @@ def get_crypto_positions(access_token: str, info: Optional[str] = None) -> List[
 def get_crypto_quote(access_token: str, symbol: str, info: Optional[str] = None) -> Optional[Dict]:
     """Get crypto quote by symbol - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://nummus.robinhood.com/currencies/{symbol}/quote/', headers=headers)
+    response = _make_request('GET', crypto_quote_url(symbol), headers=headers)
     
     if info and response and info in response:
         return response[info]
@@ -41,7 +45,7 @@ def get_crypto_quote(access_token: str, symbol: str, info: Optional[str] = None)
 def get_crypto_quote_from_id(access_token: str, crypto_id: str, info: Optional[str] = None) -> Optional[Dict]:
     """Get crypto quote by ID - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://nummus.robinhood.com/currencies/{crypto_id}/quote/', headers=headers)
+    response = _make_request('GET', crypto_quote_url(crypto_id), headers=headers)
     
     if info and response and info in response:
         return response[info]
@@ -50,7 +54,7 @@ def get_crypto_quote_from_id(access_token: str, crypto_id: str, info: Optional[s
 def get_crypto_currency_pairs(access_token: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get crypto currency pairs - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://nummus.robinhood.com/currency_pairs/', headers=headers)
+    response = _make_request('GET', crypto_currency_pairs_url(), headers=headers)
     
     if response and 'results' in response:
         pairs = response['results']
@@ -70,7 +74,7 @@ def get_crypto_historicals(access_token: str, symbol: str, interval: str = '5min
         'bounds': bounds
     }
     
-    response = _make_request('GET', f'https://nummus.robinhood.com/currencies/{symbol}/historicals/', 
+    response = _make_request('GET', crypto_historical_url(symbol), 
                            headers=headers, params=params)
     
     if response and 'data_points' in response:
@@ -83,7 +87,7 @@ def get_crypto_historicals(access_token: str, symbol: str, interval: str = '5min
 def get_crypto_info(access_token: str, symbol: str, info: Optional[str] = None) -> Optional[Dict]:
     """Get crypto currency info - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://nummus.robinhood.com/currencies/{symbol}/', headers=headers)
+    response = _make_request('GET', crypto_currency_url(symbol), headers=headers)
     
     if info and response and info in response:
         return response[info]

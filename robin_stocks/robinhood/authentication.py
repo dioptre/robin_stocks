@@ -18,6 +18,7 @@ from typing import Dict, List, Any, Optional, Union
 import secrets
 import time
 from .helper import _make_request
+from .urls import login_url
 
 
 def _generate_device_token() -> str:
@@ -53,7 +54,7 @@ def login_and_get_token(username: str, password: str, mfa_code: Optional[str] = 
     if mfa_code:
         payload['mfa_code'] = mfa_code
     
-    response = _make_request('POST', 'https://robinhood.com/api-token-auth/', json=payload)
+    response = _make_request('POST', login_url(), json=payload)
     
     if response and 'access_token' in response:
         return response['access_token']

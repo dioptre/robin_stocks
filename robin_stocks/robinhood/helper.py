@@ -7,6 +7,7 @@ NO STATE. NO SESSIONS. NO FILES. NO PICKLES. NO BULLSHIT.
 import requests
 from requests import Session
 from typing import Dict, List, Any, Optional, Union
+from .urls import instruments_url, option_chains_by_id_url, option_instruments_url
 
 
 def _make_request(method: str, url: str, headers: Dict[str, str] = None, 
@@ -55,7 +56,7 @@ def id_for_stock(access_token: str, symbol: str) -> Optional[str]:
 
     headers = {'Authorization': f'Bearer {access_token}'}
     params = {'symbol': symbol}
-    response = _make_request('GET', 'https://robinhood.com/instruments/', 
+    response = _make_request('GET', instruments_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response and response['results']:
@@ -78,7 +79,7 @@ def id_for_chain(access_token: str, symbol: str) -> Optional[str]:
 
     headers = {'Authorization': f'Bearer {access_token}'}
     params = {'symbol': symbol}
-    response = _make_request('GET', 'https://robinhood.com/instruments/', 
+    response = _make_request('GET', instruments_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response and response['results']:
@@ -104,7 +105,7 @@ def id_for_group(access_token: str, symbol: str) -> Optional[str]:
         return None
     
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://robinhood.com/options/chains/{chain_id}/', 
+    response = _make_request('GET', option_chains_by_id_url(chain_id), 
                            headers=headers)
     
     if response and 'underlying_instruments' in response and response['underlying_instruments']:
@@ -140,7 +141,7 @@ def id_for_option(access_token: str, symbol: str, expiration_date: str, strike: 
         'state': 'active'
     }
     
-    response = _make_request('GET', 'https://robinhood.com/options/instruments/', 
+    response = _make_request('GET', option_instruments_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response:

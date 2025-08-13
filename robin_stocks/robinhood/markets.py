@@ -2,6 +2,11 @@
 
 from typing import Dict, List, Any, Optional
 from .helper import _make_request
+from .urls import (
+    movers_sp500_url, get_100_most_popular_url, markets_url,
+    market_hours_url, currency_url, market_category_url,
+    market_by_id_url, market_hours_by_market_url
+)
 
 # STATELESS REPLACEMENTS for all market functions - NO MORE BLOCKING!
 
@@ -14,7 +19,7 @@ def get_top_movers_sp500(access_token: str, direction: str, info: Optional[str] 
         raise ValueError("direction must be 'up' or 'down'")
     
     params = {'direction': direction}
-    response = _make_request('GET', 'https://robinhood.com/midlands/movers/sp500/', 
+    response = _make_request('GET', movers_sp500_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response:
@@ -27,7 +32,7 @@ def get_top_movers_sp500(access_token: str, direction: str, info: Optional[str] 
 def get_top_100(access_token: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns a list of the Top 100 stocks on Robinhood - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/midlands/tags/tag/100-most-popular/', headers=headers)
+    response = _make_request('GET', get_100_most_popular_url(), headers=headers)
     
     if response and 'results' in response:
         stocks = response['results']
@@ -45,7 +50,7 @@ def get_top_movers(access_token: str, direction: str = 'up', info: Optional[str]
         raise ValueError("direction must be 'up' or 'down'")
     
     params = {'direction': direction}
-    response = _make_request('GET', 'https://robinhood.com/midlands/movers/sp500/', 
+    response = _make_request('GET', movers_sp500_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response:
@@ -58,7 +63,7 @@ def get_top_movers(access_token: str, direction: str = 'up', info: Optional[str]
 def get_markets(access_token: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get market data - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/markets/', headers=headers)
+    response = _make_request('GET', markets_url(), headers=headers)
     
     if response and 'results' in response:
         markets = response['results']
@@ -70,7 +75,7 @@ def get_markets(access_token: str, info: Optional[str] = None) -> List[Dict[str,
 def get_market_hours(access_token: str, market: str, date: str, info: Optional[str] = None) -> Optional[Dict]:
     """Get market hours - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://robinhood.com/markets/{market}/hours/{date}/', headers=headers)
+    response = _make_request('GET', market_hours_url(market, date), headers=headers)
     
     if info and response and info in response:
         return response[info]
@@ -85,7 +90,7 @@ def get_market_today_hours(access_token: str, market: str = 'XNAS', info: Option
 def get_market_next_open_hours(access_token: str, market: str = 'XNAS', info: Optional[str] = None) -> Optional[Dict]:
     """Get next market open hours - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://robinhood.com/markets/{market}/', headers=headers)
+    response = _make_request('GET', market_by_id_url(market), headers=headers)
     
     if response and 'todays_hours' in response:
         next_open = response['todays_hours']
@@ -98,7 +103,7 @@ def get_market_next_open_hours_after_date(access_token: str, date_str: str, mark
     """Get next market open hours after specific date - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
     params = {'date': date_str}
-    response = _make_request('GET', f'https://robinhood.com/markets/{market}/hours/', 
+    response = _make_request('GET', market_hours_by_market_url(market), 
                            headers=headers, params=params)
     
     if response and 'results' in response and response['results']:
@@ -111,7 +116,7 @@ def get_market_next_open_hours_after_date(access_token: str, date_str: str, mark
 def get_currency_pairs(access_token: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get currency pairs - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://nummus.robinhood.com/currency_pairs/', headers=headers)
+    response = _make_request('GET', currency_url(), headers=headers)
     
     if response and 'results' in response:
         pairs = response['results']
@@ -123,7 +128,7 @@ def get_currency_pairs(access_token: str, info: Optional[str] = None) -> List[Di
 def get_all_stocks_from_market_tag(access_token: str, tag: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get all stocks from market tag - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://robinhood.com/midlands/tags/tag/{tag}/', headers=headers)
+    response = _make_request('GET', market_category_url(tag), headers=headers)
     
     if response and 'results' in response:
         stocks = response['results']

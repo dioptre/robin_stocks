@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Any, Optional
 from .helper import _make_request
+from .urls import orders_url, option_orders_url, crypto_orders_url
 
 # STATELESS REPLACEMENTS for all export functions - NO MORE BLOCKING!
 
@@ -10,7 +11,7 @@ def export_completed_stock_orders(access_token: str) -> List[Dict[str, Any]]:
     headers = {'Authorization': f'Bearer {access_token}'}
     
     all_orders = []
-    url = 'https://robinhood.com/orders/'
+    url = orders_url()
     
     while url:
         response = _make_request('GET', url, headers=headers)
@@ -32,7 +33,7 @@ def export_completed_option_orders(access_token: str) -> List[Dict[str, Any]]:
     headers = {'Authorization': f'Bearer {access_token}'}
     
     all_orders = []
-    url = 'https://robinhood.com/options/orders/'
+    url = option_orders_url()
     
     while url:
         response = _make_request('GET', url, headers=headers)
@@ -54,7 +55,7 @@ def export_completed_crypto_orders(access_token: str) -> List[Dict[str, Any]]:
     headers = {'Authorization': f'Bearer {access_token}'}
     
     all_orders = []
-    url = 'https://nummus.robinhood.com/orders/'
+    url = crypto_orders_url()
     
     while url:
         response = _make_request('GET', url, headers=headers)

@@ -2,13 +2,19 @@
 
 from typing import Dict, List, Any, Optional, Union
 from .helper import _make_request, id_for_option
+from .urls import (
+    account_profile_url, crypto_account_url, crypto_cancel_url, 
+    crypto_orders_url, order_crypto_url, option_cancel_url,
+    cancel_url, orders_url, option_orders_url, instruments_url,
+    option_instruments_url
+)
 
 # STATELESS REPLACEMENTS for all order functions - NO MORE BLOCKING!
 
 def _get_account_url(access_token: str) -> Optional[str]:
     """Get the account URL for the authenticated user"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/accounts/', headers=headers)
+    response = _make_request('GET', account_profile_url(), headers=headers)
     if response and 'results' in response and response['results']:
         return response['results'][0]['url']
     return None
@@ -16,7 +22,7 @@ def _get_account_url(access_token: str) -> Optional[str]:
 def _get_crypto_account_url(access_token: str) -> Optional[str]:
     """Get the crypto account URL for the authenticated user"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://nummus.robinhood.com/accounts/', headers=headers)
+    response = _make_request('GET', crypto_account_url(), headers=headers)
     if response and 'results' in response and response['results']:
         return response['results'][0]['url']
     return None
@@ -30,7 +36,7 @@ def cancel_all_crypto_orders(access_token: str) -> bool:
         if order.get('state') in ['queued', 'unconfirmed']:
             order_id = order.get('id')
             if order_id:
-                _make_request('POST', f'https://nummus.robinhood.com/orders/{order_id}/cancel/', headers=headers)
+                _make_request('POST', crypto_cancel_url(order_id), headers=headers)
     
     return True
 
@@ -43,7 +49,7 @@ def cancel_all_option_orders(access_token: str) -> bool:
         if order.get('state') == 'queued':
             order_id = order.get('id')
             if order_id:
-                _make_request('POST', f'https://robinhood.com/options/orders/{order_id}/cancel/', headers=headers)
+                _make_request('POST', option_cancel_url(order_id), headers=headers)
     
     return True
 
@@ -56,32 +62,32 @@ def cancel_all_stock_orders(access_token: str) -> bool:
         if order.get('state') == 'queued':
             order_id = order.get('id')
             if order_id:
-                _make_request('POST', f'https://robinhood.com/orders/{order_id}/cancel/', headers=headers)
+                _make_request('POST', cancel_url(order_id), headers=headers)
     
     return True
 
 def cancel_crypto_order(access_token: str, order_id: str) -> bool:
     """Cancel crypto order - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('POST', f'https://nummus.robinhood.com/orders/{order_id}/cancel/', headers=headers)
+    response = _make_request('POST', crypto_cancel_url(order_id), headers=headers)
     return response is not None
 
 def cancel_option_order(access_token: str, order_id: str) -> bool:
     """Cancel option order - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('POST', f'https://robinhood.com/options/orders/{order_id}/cancel/', headers=headers)
+    response = _make_request('POST', option_cancel_url(order_id), headers=headers)
     return response is not None
 
 def cancel_stock_order(access_token: str, order_id: str) -> bool:
     """Cancel stock order - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('POST', f'https://robinhood.com/orders/{order_id}/cancel/', headers=headers)
+    response = _make_request('POST', cancel_url(order_id), headers=headers)
     return response is not None
 
 def find_stock_orders(access_token: str, **kwargs) -> List[Dict[str, Any]]:
     """Find stock orders with filters - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/orders/', headers=headers, params=kwargs)
+    response = _make_request('GET', orders_url(), headers=headers, params=kwargs)
     if response and 'results' in response:
         return response['results']
     return []
@@ -89,7 +95,7 @@ def find_stock_orders(access_token: str, **kwargs) -> List[Dict[str, Any]]:
 def get_all_crypto_orders(access_token: str) -> List[Dict[str, Any]]:
     """Get all crypto orders - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://nummus.robinhood.com/orders/', headers=headers)
+    response = _make_request('GET', crypto_orders_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -112,7 +118,7 @@ def get_all_open_stock_orders(access_token: str) -> List[Dict[str, Any]]:
 def get_all_option_orders(access_token: str) -> List[Dict[str, Any]]:
     """Get all option orders - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/options/orders/', headers=headers)
+    response = _make_request('GET', option_orders_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -120,7 +126,7 @@ def get_all_option_orders(access_token: str) -> List[Dict[str, Any]]:
 def get_all_stock_orders(access_token: str) -> List[Dict[str, Any]]:
     """Get all stock orders - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/orders/', headers=headers)
+    response = _make_request('GET', orders_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -128,17 +134,17 @@ def get_all_stock_orders(access_token: str) -> List[Dict[str, Any]]:
 def get_crypto_order_info(access_token: str, order_id: str) -> Optional[Dict]:
     """Get crypto order info - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', f'https://nummus.robinhood.com/orders/{order_id}/', headers=headers)
+    return _make_request('GET', crypto_orders_url(order_id), headers=headers)
 
 def get_option_order_info(access_token: str, order_id: str) -> Optional[Dict]:
     """Get option order info - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', f'https://robinhood.com/options/orders/{order_id}/', headers=headers)
+    return _make_request('GET', option_orders_url(order_id), headers=headers)
 
 def get_stock_order_info(access_token: str, order_id: str) -> Optional[Dict]:
     """Get stock order info - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', f'https://robinhood.com/orders/{order_id}/', headers=headers)
+    return _make_request('GET', orders_url(order_id), headers=headers)
 
 def order(access_token: str, symbol: str, quantity: int, side: str, 
           order_type: str = 'market', price: Optional[float] = None, **kwargs) -> Optional[Dict]:
@@ -151,7 +157,7 @@ def order(access_token: str, symbol: str, quantity: int, side: str,
         return None
     
     # Get instrument
-    instrument_response = _make_request('GET', 'https://robinhood.com/instruments/', 
+    instrument_response = _make_request('GET', instruments_url(), 
                                       headers=headers, params={'symbol': symbol})
     
     if not instrument_response or not instrument_response.get('results'):
@@ -175,7 +181,7 @@ def order(access_token: str, symbol: str, quantity: int, side: str,
     
     payload.update(kwargs)
     
-    return _make_request('POST', 'https://robinhood.com/orders/', headers=headers, json=payload)
+    return _make_request('POST', orders_url(), headers=headers, json=payload)
 
 # Market order functions
 def order_buy_market(access_token: str, symbol: str, quantity: int) -> Optional[Dict]:
@@ -232,7 +238,7 @@ def order_buy_fractional_by_price(access_token: str, symbol: str, amount: float)
     if not account_url:
         return None
     
-    instrument_response = _make_request('GET', 'https://robinhood.com/instruments/', 
+    instrument_response = _make_request('GET', instruments_url(), 
                                       headers=headers, params={'symbol': symbol})
     
     if not instrument_response or not instrument_response.get('results'):
@@ -250,7 +256,7 @@ def order_buy_fractional_by_price(access_token: str, symbol: str, amount: float)
         'time_in_force': 'gfd'
     }
     
-    return _make_request('POST', 'https://robinhood.com/orders/', headers=headers, json=payload)
+    return _make_request('POST', orders_url(), headers=headers, json=payload)
 
 def order_sell_fractional_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
     """Sell fractional shares by dollar amount - STATELESS VERSION"""
@@ -261,7 +267,7 @@ def order_sell_fractional_by_price(access_token: str, symbol: str, amount: float
     if not account_url:
         return None
     
-    instrument_response = _make_request('GET', 'https://robinhood.com/instruments/', 
+    instrument_response = _make_request('GET', instruments_url(), 
                                       headers=headers, params={'symbol': symbol})
     
     if not instrument_response or not instrument_response.get('results'):
@@ -279,7 +285,7 @@ def order_sell_fractional_by_price(access_token: str, symbol: str, amount: float
         'time_in_force': 'gfd'
     }
     
-    return _make_request('POST', 'https://robinhood.com/orders/', headers=headers, json=payload)
+    return _make_request('POST', orders_url(), headers=headers, json=payload)
 
 def order_buy_fractional_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
     """Buy fractional shares by quantity - STATELESS VERSION"""
@@ -308,7 +314,7 @@ def order_buy_crypto_by_price(access_token: str, symbol: str, amount: float) -> 
         'type': 'market'
     }
     
-    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+    return _make_request('POST', order_crypto_url(), headers=headers, json=payload)
 
 def order_sell_crypto_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
     """Sell crypto by dollar amount - STATELESS VERSION"""
@@ -328,7 +334,7 @@ def order_sell_crypto_by_price(access_token: str, symbol: str, amount: float) ->
         'type': 'market'
     }
     
-    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+    return _make_request('POST', order_crypto_url(), headers=headers, json=payload)
 
 def order_buy_crypto_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
     """Buy crypto by quantity - STATELESS VERSION"""
@@ -348,7 +354,7 @@ def order_buy_crypto_by_quantity(access_token: str, symbol: str, quantity: float
         'type': 'market'
     }
     
-    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+    return _make_request('POST', order_crypto_url(), headers=headers, json=payload)
 
 def order_sell_crypto_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
     """Sell crypto by quantity - STATELESS VERSION"""
@@ -368,7 +374,7 @@ def order_sell_crypto_by_quantity(access_token: str, symbol: str, quantity: floa
         'type': 'market'
     }
     
-    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+    return _make_request('POST', order_crypto_url(), headers=headers, json=payload)
 
 def order_crypto(access_token: str, symbol: str, side: str, quantity: Optional[float] = None, 
                 price: Optional[float] = None, order_type: str = 'market') -> Optional[Dict]:
@@ -393,7 +399,7 @@ def order_crypto(access_token: str, symbol: str, side: str, quantity: Optional[f
     if price:
         payload['price'] = str(price)
     
-    return _make_request('POST', 'https://nummus.robinhood.com/orders/', headers=headers, json=payload)
+    return _make_request('POST', order_crypto_url(), headers=headers, json=payload)
 
 def order_buy_crypto_limit(access_token: str, symbol: str, quantity: float, price: float) -> Optional[Dict]:
     """Buy crypto limit order - STATELESS VERSION"""
@@ -437,7 +443,7 @@ def order_buy_option_limit(access_token: str, symbol: str, expiration_date: str,
         'legs': [
             {
                 'side': 'buy',
-                'option': f'https://robinhood.com/options/instruments/{option_id}/',
+                'option': option_instruments_url(option_id),
                 'position_effect': 'open',
                 'ratio_quantity': 1
             }
@@ -448,7 +454,7 @@ def order_buy_option_limit(access_token: str, symbol: str, expiration_date: str,
         'price': str(price)
     }
     
-    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+    return _make_request('POST', option_orders_url(), headers=headers, json=payload)
 
 def order_sell_option_limit(access_token: str, symbol: str, expiration_date: str, strike: float, 
                            option_type: str, quantity: int, price: float) -> Optional[Dict]:
@@ -472,7 +478,7 @@ def order_sell_option_limit(access_token: str, symbol: str, expiration_date: str
         'legs': [
             {
                 'side': 'sell',
-                'option': f'https://robinhood.com/options/instruments/{option_id}/',
+                'option': option_instruments_url(option_id),
                 'position_effect': 'close',
                 'ratio_quantity': 1
             }
@@ -483,7 +489,7 @@ def order_sell_option_limit(access_token: str, symbol: str, expiration_date: str
         'price': str(price)
     }
     
-    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+    return _make_request('POST', option_orders_url(), headers=headers, json=payload)
 
 def order_buy_option_stop_limit(access_token: str, symbol: str, expiration_date: str, strike: float, 
                                option_type: str, quantity: int, price: float, stop_price: float) -> Optional[Dict]:
@@ -507,7 +513,7 @@ def order_buy_option_stop_limit(access_token: str, symbol: str, expiration_date:
         'legs': [
             {
                 'side': 'buy',
-                'option': f'https://robinhood.com/options/instruments/{option_id}/',
+                'option': option_instruments_url(option_id),
                 'position_effect': 'open',
                 'ratio_quantity': 1
             }
@@ -519,7 +525,7 @@ def order_buy_option_stop_limit(access_token: str, symbol: str, expiration_date:
         'stop_price': str(stop_price)
     }
     
-    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+    return _make_request('POST', option_orders_url(), headers=headers, json=payload)
 
 def order_sell_option_stop_limit(access_token: str, symbol: str, expiration_date: str, strike: float, 
                                 option_type: str, quantity: int, price: float, stop_price: float) -> Optional[Dict]:
@@ -543,7 +549,7 @@ def order_sell_option_stop_limit(access_token: str, symbol: str, expiration_date
         'legs': [
             {
                 'side': 'sell',
-                'option': f'https://robinhood.com/options/instruments/{option_id}/',
+                'option': option_instruments_url(option_id),
                 'position_effect': 'close',
                 'ratio_quantity': 1
             }
@@ -555,7 +561,7 @@ def order_sell_option_stop_limit(access_token: str, symbol: str, expiration_date
         'stop_price': str(stop_price)
     }
     
-    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+    return _make_request('POST', option_orders_url(), headers=headers, json=payload)
 
 def order_option_spread(access_token: str, symbol: str, expiration_date: str, 
                        buy_strike: float, sell_strike: float, option_type: str, 
@@ -582,13 +588,13 @@ def order_option_spread(access_token: str, symbol: str, expiration_date: str,
         'legs': [
             {
                 'side': 'buy',
-                'option': f'https://robinhood.com/options/instruments/{buy_option_id}/',
+                'option': option_instruments_url(buy_option_id),
                 'position_effect': 'open',
                 'ratio_quantity': 1
             },
             {
                 'side': 'sell', 
-                'option': f'https://robinhood.com/options/instruments/{sell_option_id}/',
+                'option': option_instruments_url(sell_option_id),
                 'position_effect': 'open',
                 'ratio_quantity': 1
             }
@@ -599,7 +605,7 @@ def order_option_spread(access_token: str, symbol: str, expiration_date: str,
         'price': str(price)
     }
     
-    return _make_request('POST', 'https://robinhood.com/options/orders/', headers=headers, json=payload)
+    return _make_request('POST', option_orders_url(), headers=headers, json=payload)
 
 def order_option_credit_spread(access_token: str, symbol: str, expiration_date: str, 
                               short_strike: float, long_strike: float, option_type: str, 

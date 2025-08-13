@@ -2,6 +2,11 @@
 
 from typing import Dict, List, Any, Optional, Union
 from .helper import _make_request
+from .urls import (
+    fundamentals_url, events_url, instruments_url, news_url,
+    ratings_url, instrument_splits_url, instrument_by_id_url,
+    quotes_url, quotes_by_id_url, historicals_url, popularity_url, splits_url
+)
 
 def find_instrument_data(access_token: str, symbol: str) -> Optional[Dict]:
     """Find instrument data by symbol"""
@@ -12,7 +17,7 @@ def get_earnings(access_token: str, symbol: str) -> List[Dict]:
     """Get earnings data"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
-    response = _make_request('GET', f'https://robinhood.com/fundamentals/{symbol}/', 
+    response = _make_request('GET', fundamentals_url(), params={'symbol': symbol}, 
                            headers=headers)
     
     if response:
@@ -22,7 +27,7 @@ def get_earnings(access_token: str, symbol: str) -> List[Dict]:
 def get_events(access_token: str, symbol: str) -> List[Dict[str, Any]]:
     """Get events for symbol"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://robinhood.com/instruments/{symbol}/events/', headers=headers)
+    response = _make_request('GET', events_url(), params={'symbol': symbol}, headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -35,7 +40,7 @@ def get_fundamentals(access_token: str, symbols: Union[str, List[str]]) -> List[
     headers = {'Authorization': f'Bearer {access_token}'}
     symbols_str = ','.join(symbols)
     
-    response = _make_request('GET', 'https://robinhood.com/fundamentals/', 
+    response = _make_request('GET', fundamentals_url(), 
                            headers=headers, params={'symbols': symbols_str})
     
     if response and 'results' in response:
@@ -55,7 +60,7 @@ def get_instruments_by_symbols(access_token: str, symbols: Union[str, List[str]]
     headers = {'Authorization': f'Bearer {access_token}'}
     symbols_str = ','.join(symbols)
     
-    response = _make_request('GET', 'https://robinhood.com/instruments/', 
+    response = _make_request('GET', instruments_url(), 
                            headers=headers, params={'symbols': symbols_str})
     
     if response and 'results' in response:
@@ -81,7 +86,7 @@ def get_news(access_token: str, symbol: str) -> List[Dict]:
     """Get news for symbol"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
-    response = _make_request('GET', f'https://robinhood.com/midlands/news/{symbol}/', 
+    response = _make_request('GET', news_url(symbol), 
                            headers=headers)
     
     if response and 'results' in response:
@@ -91,7 +96,7 @@ def get_news(access_token: str, symbol: str) -> List[Dict]:
 def get_pricebook_by_id(access_token: str, instrument_id: str) -> Optional[Dict]:
     """Get price book by instrument ID"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', f'https://robinhood.com/instruments/{instrument_id}/', headers=headers)
+    return _make_request('GET', instrument_by_id_url(instrument_id), headers=headers)
 
 def get_pricebook_by_symbol(access_token: str, symbol: str) -> Optional[Dict]:
     """Get price book by symbol"""
@@ -109,7 +114,7 @@ def get_quotes(access_token: str, symbols: Union[str, List[str]]) -> List[Dict]:
     headers = {'Authorization': f'Bearer {access_token}'}
     symbols_str = ','.join(symbols)
     
-    response = _make_request('GET', 'https://robinhood.com/quotes/', 
+    response = _make_request('GET', quotes_url(), 
                            headers=headers, params={'symbols': symbols_str})
     
     if response and 'results' in response:
@@ -120,17 +125,17 @@ def get_ratings(access_token: str, symbol: str) -> Dict:
     """Get analyst ratings"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
-    response = _make_request('GET', f'https://robinhood.com/midlands/ratings/{symbol}/', 
+    response = _make_request('GET', ratings_url(symbol), 
                            headers=headers)
     
     return response or {}
 
 def get_splits(access_token: str, symbol: str) -> List[Dict]:
-    """Get stock splits"""
+    """Get stock splits (legacy method using instrument_id lookup)"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
     # First get instrument
-    instrument_response = _make_request('GET', 'https://robinhood.com/instruments/', 
+    instrument_response = _make_request('GET', instruments_url(), 
                                       headers=headers, params={'symbol': symbol})
     
     if not instrument_response or not instrument_response.get('results'):
@@ -138,7 +143,7 @@ def get_splits(access_token: str, symbol: str) -> List[Dict]:
     
     instrument_id = instrument_response['results'][0]['id']
     
-    response = _make_request('GET', f'https://robinhood.com/instruments/{instrument_id}/splits/', 
+    response = _make_request('GET', instrument_splits_url(instrument_id), 
                            headers=headers)
     
     if response and 'results' in response:
@@ -161,7 +166,7 @@ def get_stock_historicals(access_token: str, symbols: Union[str, List[str]],
         'bounds': bounds
     }
     
-    response = _make_request('GET', 'https://robinhood.com/quotes/historicals/', 
+    response = _make_request('GET', historicals_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response:
@@ -171,7 +176,7 @@ def get_stock_historicals(access_token: str, symbols: Union[str, List[str]],
 def get_stock_quote_by_id(access_token: str, instrument_id: str) -> Optional[Dict]:
     """Get stock quote by instrument ID"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', f'https://robinhood.com/quotes/?ids={instrument_id}', headers=headers)
+    return _make_request('GET', quotes_by_id_url(instrument_id), headers=headers)
 
 def get_stock_quote_by_symbol(access_token: str, symbol: str) -> Optional[Dict]:
     """Get stock quote by symbol"""
@@ -182,3 +187,23 @@ def get_symbol_by_url(access_token: str, url: str) -> Optional[str]:
     """Get symbol by instrument URL"""
     instrument = get_instrument_by_url(access_token, url)
     return instrument.get('symbol') if instrument else None
+
+def get_popularity(access_token: str, symbol: str) -> Optional[Dict]:
+    """Get stock popularity data"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    response = _make_request('GET', popularity_url(symbol), 
+                           headers=headers)
+    
+    return response
+
+def get_splits_by_symbol(access_token: str, symbol: str) -> List[Dict]:
+    """Get stock splits data by symbol"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    response = _make_request('GET', splits_url(symbol), 
+                           headers=headers)
+    
+    if response and 'results' in response:
+        return response['results']
+    return []

@@ -2,6 +2,19 @@
 
 from typing import Dict, List, Any, Optional
 from .helper import _make_request
+from .urls import (
+    phoenix_url, positions_url, account_profile_url, dividends_url,
+    banktransfers_url, documents_url, linked_url, margin_url,
+    margininterest_url, referral_url, stockloan_url, interest_url,
+    subscription_url, wiretransfers_url, watchlists_url,
+    cardtransactions_url, daytrades_url, notifications_url,
+    watchlist_by_name_url, watchlist_add_url, document_by_id_url,
+    dividends_by_instrument_url, ach_relationships_delete_url,
+    portfolios_historicals_url, cash_management_cards_transactions_url,
+    accounts_day_trades_url, cash_management_stock_loan_payments_url,
+    cash_management_interest_payments_url, all_watchlists_url,
+    notifications_base_url, margin_interest_url
+)
 
 
 def load_phoenix_account(access_token: str, info: Optional[str] = None) -> Optional[Dict]:
@@ -12,7 +25,7 @@ def load_phoenix_account(access_token: str, info: Optional[str] = None) -> Optio
     :returns: Account information dictionary
     """
     headers = {'Authorization': f'Bearer {access_token}'}
-    data = _make_request('GET', 'https://robinhood.com/phoenix/', headers=headers)
+    data = _make_request('GET', phoenix_url(), headers=headers)
     
     if info and data and info in data:
         return data[info]
@@ -24,7 +37,7 @@ def get_positions(access_token: str, nonzero_only: bool = True) -> List[Dict]:
     headers = {'Authorization': f'Bearer {access_token}'}
     params = {'nonzero': 'true'} if nonzero_only else {}
     
-    response = _make_request('GET', 'https://robinhood.com/positions/', 
+    response = _make_request('GET', positions_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response:
@@ -35,7 +48,7 @@ def get_positions(access_token: str, nonzero_only: bool = True) -> List[Dict]:
 def get_account_profile(access_token: str) -> Optional[Dict]:
     """Get account profile - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/accounts/', headers=headers)
+    response = _make_request('GET', account_profile_url(), headers=headers)
     
     if response and 'results' in response and len(response['results']) > 0:
         return response['results'][0]
@@ -45,13 +58,13 @@ def get_account_profile(access_token: str) -> Optional[Dict]:
 def get_portfolio_profile(access_token: str) -> Optional[Dict]:
     """Get portfolio profile - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', 'https://robinhood.com/positions/', headers=headers)
+    return _make_request('GET', positions_url(), headers=headers)
 
 
 def get_watchlists(access_token: str) -> List[Dict]:
     """Get watchlists - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/watchlists/', headers=headers)
+    response = _make_request('GET', all_watchlists_url(), headers=headers)
     
     if response and 'results' in response:
         return response['results']
@@ -61,7 +74,7 @@ def get_watchlists(access_token: str) -> List[Dict]:
 def get_dividends(access_token: str) -> List[Dict]:
     """Get dividends - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/dividends/', headers=headers)
+    response = _make_request('GET', dividends_url(), headers=headers)
     
     if response and 'results' in response:
         return response['results']
@@ -71,7 +84,7 @@ def get_dividends(access_token: str) -> List[Dict]:
 def get_notifications(access_token: str) -> List[Dict]:
     """Get notifications - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/notifications/', headers=headers)
+    response = _make_request('GET', notifications_base_url(), headers=headers)
     
     if response and 'results' in response:
         return response['results']
@@ -81,7 +94,7 @@ def get_notifications(access_token: str) -> List[Dict]:
 def get_bank_transfers(access_token: str) -> List[Dict]:
     """Get bank transfers - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/ach/transfers/', headers=headers)
+    response = _make_request('GET', banktransfers_url(), headers=headers)
     
     if response and 'results' in response:
         return response['results']
@@ -131,7 +144,7 @@ def deposit_funds_to_robinhood_account(access_token: str, amount: float, bank_ac
         'ach_relationship': bank_account_id,
         'direction': 'deposit'
     }
-    return _make_request('POST', 'https://robinhood.com/ach/transfers/', headers=headers, json=payload)
+    return _make_request('POST', banktransfers_url(), headers=headers, json=payload)
 
 def download_all_documents(access_token: str, doc_type: str = 'all') -> List[bytes]:
     """Download all documents - STATELESS VERSION"""
@@ -150,7 +163,7 @@ def download_all_documents(access_token: str, doc_type: str = 'all') -> List[byt
 def download_document(access_token: str, document_id: str) -> Optional[bytes]:
     """Download specific document - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    return _make_request('GET', f'https://robinhood.com/documents/{document_id}/', headers=headers)
+    return _make_request('GET', document_by_id_url(document_id), headers=headers)
 
 def get_all_positions(access_token: str) -> List[Dict[str, Any]]:
     """Get all positions including zero positions - STATELESS VERSION"""
@@ -163,7 +176,7 @@ def get_all_watchlists(access_token: str) -> List[Dict[str, Any]]:
 def get_bank_account_info(access_token: str) -> List[Dict[str, Any]]:
     """Get bank account info - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/ach/relationships/', headers=headers)
+    response = _make_request('GET', linked_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -171,7 +184,7 @@ def get_bank_account_info(access_token: str) -> List[Dict[str, Any]]:
 def get_card_transactions(access_token: str) -> List[Dict[str, Any]]:
     """Get card transactions - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/cash_management/cards/transactions/', headers=headers)
+    response = _make_request('GET', cash_management_cards_transactions_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -179,7 +192,7 @@ def get_card_transactions(access_token: str) -> List[Dict[str, Any]]:
 def get_day_trades(access_token: str) -> List[Dict[str, Any]]:
     """Get day trades - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/accounts/day_trades/', headers=headers)
+    response = _make_request('GET', accounts_day_trades_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -187,7 +200,7 @@ def get_day_trades(access_token: str) -> List[Dict[str, Any]]:
 def get_dividends_by_instrument(access_token: str, instrument_id: str) -> List[Dict[str, Any]]:
     """Get dividends for specific instrument - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://robinhood.com/dividends/?instrument={instrument_id}', headers=headers)
+    response = _make_request('GET', dividends_by_instrument_url(instrument_id), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -195,7 +208,7 @@ def get_dividends_by_instrument(access_token: str, instrument_id: str) -> List[D
 def get_documents(access_token: str) -> List[Dict[str, Any]]:
     """Get documents - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/documents/', headers=headers)
+    response = _make_request('GET', documents_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -204,7 +217,7 @@ def get_historical_portfolio(access_token: str, interval: str = '5minute', span:
     """Get historical portfolio - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
     params = {'interval': interval, 'span': span}
-    response = _make_request('GET', 'https://robinhood.com/accounts/historicals/', headers=headers, params=params)
+    response = _make_request('GET', portfolios_historicals_url(), headers=headers, params=params)
     if response and 'results' in response:
         return response['results']
     return []
@@ -221,7 +234,7 @@ def get_linked_bank_accounts(access_token: str) -> List[Dict[str, Any]]:
 def get_margin_calls(access_token: str) -> List[Dict[str, Any]]:
     """Get margin calls - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/margin/calls/', headers=headers)
+    response = _make_request('GET', margin_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -229,7 +242,7 @@ def get_margin_calls(access_token: str) -> List[Dict[str, Any]]:
 def get_margin_interest(access_token: str) -> List[Dict[str, Any]]:
     """Get margin interest - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/margin/interest/', headers=headers)
+    response = _make_request('GET', margin_interest_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -241,7 +254,7 @@ def get_open_stock_positions(access_token: str) -> List[Dict[str, Any]]:
 def get_referrals(access_token: str) -> List[Dict[str, Any]]:
     """Get referrals - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/midlands/referral/', headers=headers)
+    response = _make_request('GET', referral_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -249,7 +262,7 @@ def get_referrals(access_token: str) -> List[Dict[str, Any]]:
 def get_stock_loan_payments(access_token: str) -> List[Dict[str, Any]]:
     """Get stock loan payments - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/cash_management/stock_loan_payments/', headers=headers)
+    response = _make_request('GET', cash_management_stock_loan_payments_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -257,7 +270,7 @@ def get_stock_loan_payments(access_token: str) -> List[Dict[str, Any]]:
 def get_interest_payments(access_token: str) -> List[Dict[str, Any]]:
     """Get interest payments - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/cash_management/interest_payments/', headers=headers)
+    response = _make_request('GET', cash_management_interest_payments_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -265,7 +278,7 @@ def get_interest_payments(access_token: str) -> List[Dict[str, Any]]:
 def get_subscription_fees(access_token: str) -> List[Dict[str, Any]]:
     """Get subscription fees - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/subscription/subscription_fees/', headers=headers)
+    response = _make_request('GET', subscription_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -278,7 +291,7 @@ def get_total_dividends(access_token: str) -> float:
 def get_watchlist_by_name(access_token: str, name: str = 'Default') -> List[Dict[str, Any]]:
     """Get watchlist by name - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://robinhood.com/watchlists/{name}/', headers=headers)
+    response = _make_request('GET', watchlist_by_name_url(name), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -286,7 +299,7 @@ def get_watchlist_by_name(access_token: str, name: str = 'Default') -> List[Dict
 def get_wire_transfers(access_token: str) -> List[Dict[str, Any]]:
     """Get wire transfers - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/wire/transfers/', headers=headers)
+    response = _make_request('GET', wiretransfers_url(), headers=headers)
     if response and 'results' in response:
         return response['results']
     return []
@@ -296,13 +309,13 @@ def post_symbols_to_watchlist(access_token: str, symbols: List[str], watchlist_n
     headers = {'Authorization': f'Bearer {access_token}'}
     for symbol in symbols:
         payload = {'symbol': symbol}
-        _make_request('POST', f'https://robinhood.com/watchlists/{watchlist_name}/', headers=headers, json=payload)
+        _make_request('POST', watchlist_add_url(watchlist_name), headers=headers, json=payload)
     return True
 
 def unlink_bank_account(access_token: str, bank_account_id: str) -> bool:
     """Unlink bank account - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('DELETE', f'https://robinhood.com/ach/relationships/{bank_account_id}/', headers=headers)
+    response = _make_request('DELETE', ach_relationships_delete_url(bank_account_id), headers=headers)
     return response is not None
 
 def withdrawl_funds_to_bank_account(access_token: str, amount: float, bank_account_id: str) -> Optional[Dict]:
@@ -313,4 +326,4 @@ def withdrawl_funds_to_bank_account(access_token: str, amount: float, bank_accou
         'ach_relationship': bank_account_id,
         'direction': 'withdraw'
     }
-    return _make_request('POST', 'https://robinhood.com/ach/transfers/', headers=headers, json=payload)
+    return _make_request('POST', banktransfers_url(), headers=headers, json=payload)

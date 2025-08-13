@@ -3,6 +3,10 @@
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
 from .helper import _make_request
+from .urls import (
+    aggregate_url, option_positions_url, instruments_url, option_instruments_url,
+    option_historicals_url, marketdata_options_url, option_chains_url, chains_url
+)
 
 # STATELESS REPLACEMENTS for all options functions - NO MORE BLOCKING!
 
@@ -10,10 +14,7 @@ def get_aggregate_positions(access_token: str, info: Optional[str] = None, accou
     """Collapses all option orders for a stock into a single dictionary - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
-    if account_number:
-        url = f'https://robinhood.com/options/aggregate_positions/?account_number={account_number}'
-    else:
-        url = 'https://robinhood.com/options/aggregate_positions/'
+    url = aggregate_url(account_number)
     
     response = _make_request('GET', url, headers=headers)
     
@@ -28,10 +29,7 @@ def get_aggregate_open_positions(access_token: str, info: Optional[str] = None, 
     """Collapses all open option positions for a stock into a single dictionary - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
-    if account_number:
-        url = f'https://robinhood.com/options/aggregate_positions/?account_number={account_number}'
-    else:
-        url = 'https://robinhood.com/options/aggregate_positions/'
+    url = aggregate_url(account_number)
     
     params = {'nonzero': 'true'}
     response = _make_request('GET', url, headers=headers, params=params)
@@ -46,7 +44,7 @@ def get_aggregate_open_positions(access_token: str, info: Optional[str] = None, 
 def get_all_option_positions(access_token: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns all option positions - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/options/positions/', headers=headers)
+    response = _make_request('GET', option_positions_url(), headers=headers)
     
     if response and 'results' in response:
         positions = response['results']
@@ -59,7 +57,7 @@ def get_open_option_positions(access_token: str, info: Optional[str] = None) -> 
     """Returns open option positions - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
     params = {'nonzero': 'true'}
-    response = _make_request('GET', 'https://robinhood.com/options/positions/', headers=headers, params=params)
+    response = _make_request('GET', option_positions_url(), headers=headers, params=params)
     
     if response and 'results' in response:
         positions = response['results']
@@ -73,14 +71,14 @@ def get_chains(access_token: str, symbol: str, info: Optional[str] = None) -> Li
     headers = {'Authorization': f'Bearer {access_token}'}
     
     # First get the instrument
-    instrument_response = _make_request('GET', 'https://robinhood.com/instruments/', 
+    instrument_response = _make_request('GET', instruments_url(), 
                                       headers=headers, params={'symbol': symbol})
     
     if not instrument_response or not instrument_response.get('results'):
         return []
     
     instrument_id = instrument_response['results'][0]['id']
-    response = _make_request('GET', f'https://robinhood.com/options/chains/?equity_instrument_ids={instrument_id}', 
+    response = _make_request('GET', option_chains_url(instrument_id), 
                            headers=headers)
     
     if response and 'results' in response:
@@ -93,7 +91,7 @@ def get_chains(access_token: str, symbol: str, info: Optional[str] = None) -> Li
 def get_market_options(access_token: str, info: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get market options data - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', 'https://robinhood.com/options/instruments/', headers=headers)
+    response = _make_request('GET', option_instruments_url(), headers=headers)
     
     if response and 'results' in response:
         options = response['results']
@@ -112,7 +110,7 @@ def get_option_historicals(access_token: str, option_id: str, interval: str = '5
         'span': span
     }
     
-    response = _make_request('GET', f'https://robinhood.com/options/instruments/{option_id}/historicals/', 
+    response = _make_request('GET', option_historicals_url(option_id), 
                            headers=headers, params=params)
     
     if response and 'data_points' in response:
@@ -143,7 +141,7 @@ def get_option_instrument_data(access_token: str, symbol: str, expiration_date: 
         'type': option_type
     }
     
-    response = _make_request('GET', 'https://robinhood.com/options/instruments/', 
+    response = _make_request('GET', option_instruments_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response and response['results']:
@@ -156,7 +154,7 @@ def get_option_instrument_data(access_token: str, symbol: str, expiration_date: 
 def get_option_instrument_data_by_id(access_token: str, option_id: str, info: Optional[str] = None) -> Optional[Dict]:
     """Get option instrument data by ID - STATELESS VERSION"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    response = _make_request('GET', f'https://robinhood.com/options/instruments/{option_id}/', headers=headers)
+    response = _make_request('GET', option_instruments_url(option_id), headers=headers)
     
     if info and response and info in response:
         return response[info]
@@ -170,8 +168,8 @@ def get_option_market_data(access_token: str, option_ids: Union[str, List[str]],
         option_ids = [option_ids]
     
     ids_str = ','.join(option_ids)
-    response = _make_request('GET', f'https://robinhood.com/marketdata/options/?instruments={ids_str}', 
-                           headers=headers)
+    response = _make_request('GET', marketdata_options_url(), 
+                           headers=headers, params={'instruments': ids_str})
     
     if response and 'results' in response:
         market_data = response['results']
@@ -179,6 +177,16 @@ def get_option_market_data(access_token: str, option_ids: Union[str, List[str]],
             return [data.get(info) for data in market_data if info in data]
         return market_data
     return []
+
+def get_chains_by_symbol(access_token: str, symbol: str, info: Optional[str] = None) -> Optional[Dict]:
+    """Get option chains data by symbol - STATELESS VERSION"""
+    headers = {'Authorization': f'Bearer {access_token}'}
+    
+    response = _make_request('GET', chains_url(symbol), headers=headers)
+    
+    if info and response and info in response:
+        return response[info]
+    return response
 
 def get_option_market_data_by_id(access_token: str, option_id: str, info: Optional[str] = None) -> Optional[Dict]:
     """Get option market data by ID - STATELESS VERSION"""
@@ -208,7 +216,7 @@ def find_tradable_options(access_token: str, symbol: str, expiration_date: Optio
     if option_type:
         params['type'] = option_type
     
-    response = _make_request('GET', 'https://robinhood.com/options/instruments/', 
+    response = _make_request('GET', option_instruments_url(), 
                            headers=headers, params=params)
     
     if response and 'results' in response:
