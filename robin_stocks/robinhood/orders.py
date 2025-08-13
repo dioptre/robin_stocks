@@ -374,15 +374,11 @@ def order_buy_crypto_by_price(access_token: str, symbol: str, amount_in_dollars:
     # Get crypto account ID (not URL)
     first_crypto_account = request_get(access_token, crypto_account_url(), data_type='indexzero')
     if not first_crypto_account:
-        print(f"CRYPTO DEBUG: Could not get crypto account")
         return None
     
     account_id = first_crypto_account.get('id')
     if not account_id:
-        print(f"CRYPTO DEBUG: Could not get crypto account ID")
         return None
-    
-    print(f"CRYPTO DEBUG: Crypto account ID: {account_id}")
     
     # Get crypto quote for price calculation (like GitHub)
     from .crypto import get_crypto_quote_from_id
@@ -390,16 +386,13 @@ def order_buy_crypto_by_price(access_token: str, symbol: str, amount_in_dollars:
     # Symbol should be the currency pair ID
     crypto_price = get_crypto_quote_from_id(access_token, symbol, info='ask_price')
     if not crypto_price:
-        print(f"CRYPTO DEBUG: Could not get crypto price for {symbol}")
         return None
     
     crypto_price_float = float(crypto_price)
-    print(f"CRYPTO DEBUG: Crypto ask price: ${crypto_price_float}")
     
     # Calculate quantity from dollar amount (like GitHub)
     from .helper import round_price
     quantity = round_price(amount_in_dollars / crypto_price_float)
-    print(f"CRYPTO DEBUG: Calculated quantity: {quantity}")
     
     # Generate unique reference ID (like GitHub)
     import uuid
@@ -417,11 +410,7 @@ def order_buy_crypto_by_price(access_token: str, symbol: str, amount_in_dollars:
         'type': 'market'
     }
     
-    print(f"CRYPTO DEBUG: Order payload: {payload}")
-    print(f"CRYPTO DEBUG: Order URL: {order_crypto_url()}")
-    
     result = _make_request('POST', order_crypto_url(), headers=headers, json=payload)
-    print(f"CRYPTO DEBUG: Order result: {result}")
     
     return result
 
