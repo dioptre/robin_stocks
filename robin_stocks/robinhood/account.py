@@ -10,7 +10,7 @@ from .urls import (
     cardtransactions_url, daytrades_url, notifications_url,
     watchlist_by_name_url, watchlist_add_url, document_by_id_url,
     dividends_by_instrument_url, ach_relationships_delete_url,
-    portfolios_historicals_url, cash_management_cards_transactions_url,
+    portfolis_historicals_url, cash_management_cards_transactions_url,
     accounts_day_trades_url, cash_management_stock_loan_payments_url,
     cash_management_interest_payments_url, all_watchlists_url,
     notifications_base_url, margin_interest_url
@@ -235,7 +235,7 @@ def get_historical_portfolio(access_token: str, interval: str = '5minute', span:
         return []
     
     params = {'interval': interval, 'span': span}
-    response = request_get(access_token, portfolios_historicals_url(account_number), 
+    response = request_get(access_token, portfolis_historicals_url(account_number), 
                           data_type='results', payload=params)
     return response if response else []
 

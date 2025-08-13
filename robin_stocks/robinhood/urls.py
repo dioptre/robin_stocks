@@ -36,8 +36,8 @@ def security_profile_url():
 def user_profile_url():
     return 'https://api.robinhood.com/user/'
 
-def portfolios_historicals_url(account_number):
-    return f'https://api.robinhood.com/accounts/{account_number}/portfolio/historicals/'
+def portfolis_historicals_url(account_number):
+    return f'https://api.robinhood.com/portfolios/historicals/{account_number}/'
 
 # Stocks
 def earnings_url():
