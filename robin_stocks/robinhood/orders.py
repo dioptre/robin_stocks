@@ -388,7 +388,7 @@ def order_buy_crypto_by_price(access_token: str, symbol: str, amount_in_dollars:
     if not crypto_price:
         return None
     
-    crypto_price_float = float(crypto_price)
+    crypto_price_float = round(float(crypto_price), 2)  # Round to nearest cent
     
     # Calculate quantity from dollar amount (like GitHub)
     from .helper import round_price
@@ -415,18 +415,43 @@ def order_buy_crypto_by_price(access_token: str, symbol: str, amount_in_dollars:
     return result
 
 def order_sell_crypto_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
-    """Sell crypto by dollar amount - STATELESS VERSION"""
+    """Sell crypto by dollar amount - STATELESS VERSION (matching GitHub format)"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
-    # Get crypto account URL
-    account_url = _get_crypto_account_url(access_token)
-    if not account_url:
+    # Get crypto account ID (not URL)
+    first_crypto_account = request_get(access_token, crypto_account_url(), data_type='indexzero')
+    if not first_crypto_account:
         return None
     
+    account_id = first_crypto_account.get('id')
+    if not account_id:
+        return None
+    
+    # Get current crypto price for quantity calculation (like GitHub)
+    from .crypto import get_crypto_quote_from_id
+    
+    # Get bid price for sell orders (like GitHub)
+    crypto_price = get_crypto_quote_from_id(access_token, symbol, info='bid_price')
+    if not crypto_price:
+        return None
+    
+    crypto_price_float = round(float(crypto_price), 2)  # Round to nearest cent
+    
+    # Calculate quantity from dollar amount (like GitHub)
+    from .helper import round_price
+    quantity = round_price(amount / crypto_price_float)
+    
+    # Generate unique reference ID (like GitHub)
+    import uuid
+    ref_id = str(uuid.uuid4())
+    
+    # Build payload matching GitHub format exactly
     payload = {
-        'account': account_url,
-        'currency_pair_id': symbol,  # Would need to resolve crypto pair ID
-        'price': str(amount),
+        'account_id': account_id,
+        'currency_pair_id': symbol,  # Should be the pair ID
+        'price': str(crypto_price_float),
+        'quantity': str(quantity),
+        'ref_id': ref_id,
         'side': 'sell',
         'time_in_force': 'gtc',
         'type': 'market'
@@ -455,18 +480,39 @@ def order_buy_crypto_by_quantity(access_token: str, symbol: str, quantity: float
     return _make_request('POST', order_crypto_url(), headers=headers, json=payload)
 
 def order_sell_crypto_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
-    """Sell crypto by quantity - STATELESS VERSION"""
+    """Sell crypto by quantity - STATELESS VERSION (matching GitHub format)"""
     headers = {'Authorization': f'Bearer {access_token}'}
     
-    # Get crypto account URL
-    account_url = _get_crypto_account_url(access_token)
-    if not account_url:
+    # Get crypto account ID (not URL)
+    first_crypto_account = request_get(access_token, crypto_account_url(), data_type='indexzero')
+    if not first_crypto_account:
         return None
     
+    account_id = first_crypto_account.get('id')
+    if not account_id:
+        return None
+    
+    # Get current crypto price (like GitHub)
+    from .crypto import get_crypto_quote_from_id
+    
+    # Get bid price for sell orders (like GitHub)
+    crypto_price = get_crypto_quote_from_id(access_token, symbol, info='bid_price')
+    if not crypto_price:
+        return None
+    
+    crypto_price_float = round(float(crypto_price), 2)  # Round to nearest cent
+    
+    # Generate unique reference ID (like GitHub)
+    import uuid
+    ref_id = str(uuid.uuid4())
+    
+    # Build payload matching GitHub format exactly
     payload = {
-        'account': account_url,
-        'currency_pair_id': symbol,
+        'account_id': account_id,
+        'currency_pair_id': symbol,  # Should be the pair ID
+        'price': str(crypto_price_float),
         'quantity': str(quantity),
+        'ref_id': ref_id,
         'side': 'sell',
         'time_in_force': 'gtc',
         'type': 'market'
