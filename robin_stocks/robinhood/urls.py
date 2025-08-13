@@ -166,9 +166,6 @@ def dividends_by_instrument_url(instrument_id):
 def ach_relationships_delete_url(bank_account_id):
     return f'https://api.robinhood.com/ach/relationships/{bank_account_id}/'
 
-def portfolios_historicals_url():
-    return 'https://api.robinhood.com/accounts/historicals/'
-
 def cash_management_cards_transactions_url():
     return 'https://api.robinhood.com/cash_management/cards/transactions/'
 
