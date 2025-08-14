@@ -228,16 +228,29 @@ def get_documents(access_token: str) -> List[Dict[str, Any]]:
     return []
 
 def get_historical_portfolio(access_token: str, interval: str = '5minute', span: str = 'day') -> List[Dict[str, Any]]:
-    """Get historical portfolio - STATELESS VERSION"""
-    # Get account number using enhanced helper
-    account_number = _get_account_number(access_token)
-    if not account_number:
-        return []
+    """Get current portfolio snapshot - Historical data endpoint is deprecated
     
-    params = {'interval': interval, 'span': span}
-    response = request_get(access_token, portfolios_historicals_url(account_number), 
-                          data_type='results', payload=params)
-    return response if response else []
+    Note: This now returns current portfolio data since historical endpoints are unavailable.
+    Returns single snapshot wrapped in list for backwards compatibility.
+    """
+    try:
+        # Get current portfolio snapshot instead of historical data
+        account_number = _get_account_number(access_token)
+        if not account_number:
+            print("ROBINHOOD: No account number found for portfolio")
+            return []
+        
+        # Use the working portfolios endpoint for current data
+        response = request_get(access_token, portfolios_historicals_url(account_number), 
+                              data_type='regular', raise_on_error=False)
+        
+        if response:
+            # Wrap in list for backwards compatibility with historical data format
+            return [response]
+        return []
+    except Exception as e:
+        print(f"ROBINHOOD: Portfolio error: {e}")
+        return []
 
 def get_latest_notification(access_token: str) -> Optional[Dict[str, Any]]:
     """Get latest notification - STATELESS VERSION"""
