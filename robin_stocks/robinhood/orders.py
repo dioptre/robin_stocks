@@ -165,9 +165,25 @@ def get_stock_order_info(access_token: str, order_id: str) -> Optional[Dict]:
 
 def order(access_token: str, symbol: str, quantity: Union[int, float], side: str, 
           order_type: str = 'market', price: Optional[float] = None, stop_price: Optional[float] = None,
-          time_in_force: str = 'gfd', market_hours: str = 'regular_hours', **kwargs) -> Optional[Dict]:
-    """Generic order function - STATELESS VERSION"""
+          time_in_force: str = 'gtc', market_hours: str = 'regular_hours', extended_hours: bool = False, **kwargs) -> Optional[Dict]:
+    """Generic order function - STATELESS VERSION - Fixed to match original robin_stocks exactly"""
     headers = {'Authorization': f'Bearer {access_token}'}
+    
+    try:
+        symbol = symbol.upper().strip()
+    except AttributeError as message:
+        print(f"Symbol error: {message}")
+        return None
+    
+    # Determine order type like original
+    if price and stop_price:
+        order_type = "stop_limit"
+    elif price:
+        order_type = "limit"
+    elif stop_price:
+        order_type = "stop_loss"
+    else:
+        order_type = "market"
     
     # Get account URL
     account_url = _get_account_url(access_token)
@@ -183,56 +199,42 @@ def order(access_token: str, symbol: str, quantity: Union[int, float], side: str
     
     instrument_url = instrument_response['results'][0]['url']
     
-    # Get current quote data for required fields (like original robin-stocks)
-    from .stocks import get_quotes
-    quote_data = get_quotes(access_token, [symbol])
-    if not quote_data or len(quote_data) == 0:
-        return None
-        
-    quote = quote_data[0]
-    ask_price = float(quote.get('ask_price', 0.0))
-    bid_price = float(quote.get('bid_price', 0.0))
-    current_price = float(quote.get('last_trade_price', ask_price))
-    
     # Generate unique reference ID like original
     import uuid
     ref_id = str(uuid.uuid4())
     
-    # Get current timestamp
-    from datetime import datetime
-    timestamp = datetime.now().isoformat()
+    # Round quantity if it's a string (like original)
+    if isinstance(quantity, str):
+        quantity = round_price(quantity)
     
-    # Build payload with all required fields like original robin-stocks
+    # Fix extended_hours and market_hours consistency (like original)
+    if extended_hours:
+        market_hours = 'extended_hours'
+        extended_hours = True
+    else:
+        market_hours = 'regular_hours'
+        extended_hours = False
+    
+    # Build payload EXACTLY like original robin-stocks
     payload = {
         'account': account_url,
         'instrument': instrument_url,
         'symbol': symbol,
-        'price': str(round_price(current_price)),
-        'ask_price': str(round_price(ask_price)),
-        'bid_price': str(round_price(bid_price)),
-        'bid_ask_timestamp': timestamp,
-        'quantity': str(quantity),
+        'price': price,  # None for market orders - will be removed below
+        'quantity': quantity,
         'ref_id': ref_id,
         'type': order_type,
+        'stop_price': stop_price,  # None unless stop order - will be removed below
         'time_in_force': time_in_force,
         'trigger': 'immediate',
         'side': side,
+        'extended_hours': extended_hours,
         'market_hours': market_hours,
-        'extended_hours': market_hours != 'regular_hours',
         'order_form_version': 4
     }
     
-    # Add limit price if specified
-    if price and order_type == 'limit':
-        payload['price'] = str(round_price(price))
-        
-    # Add stop price if specified  
-    if stop_price:
-        payload['stop_price'] = str(round_price(stop_price))
-        payload['trigger'] = 'stop'
-    
-    # Add any additional kwargs
-    payload.update(kwargs)
+    # Remove all keys that have 'None' as value (CRITICAL - like original)
+    payload = {key: value for key, value in payload.items() if value is not None}
     
     # Debug output
     print(f"ROBINHOOD PAYLOAD DEBUG: Full order payload for {symbol}: {payload}")
@@ -240,13 +242,23 @@ def order(access_token: str, symbol: str, quantity: Union[int, float], side: str
     return _make_request('POST', orders_url(), headers=headers, json=payload)
 
 # Market order functions
-def order_buy_market(access_token: str, symbol: str, quantity: Union[int, float]) -> Optional[Dict]:
+def order_buy_market(access_token: str, symbol: str, quantity: Union[int, float], 
+                     time_in_force: str = 'gfd', extended_hours: bool = False) -> Optional[Dict]:
     """Buy market order - STATELESS VERSION (supports fractional shares)"""
-    return order(access_token, symbol, quantity, 'buy', 'market')
+    # Use 'ioc' for fractional shares, 'gfd' for whole shares
+    if isinstance(quantity, float) and quantity != int(quantity):
+        time_in_force = 'ioc'  # Fractional orders need immediate or cancel
+    return order(access_token, symbol, quantity, 'buy', 'market', 
+                time_in_force=time_in_force, extended_hours=extended_hours)
 
-def order_sell_market(access_token: str, symbol: str, quantity: int) -> Optional[Dict]:
+def order_sell_market(access_token: str, symbol: str, quantity: Union[int, float], 
+                      time_in_force: str = 'gfd', extended_hours: bool = False) -> Optional[Dict]:
     """Sell market order - STATELESS VERSION"""
-    return order(access_token, symbol, quantity, 'sell', 'market')
+    # Use 'ioc' for fractional shares, 'gfd' for whole shares
+    if isinstance(quantity, float) and quantity != int(quantity):
+        time_in_force = 'ioc'  # Fractional orders need immediate or cancel
+    return order(access_token, symbol, quantity, 'sell', 'market', 
+                time_in_force=time_in_force, extended_hours=extended_hours)
 
 # Limit order functions
 def order_buy_limit(access_token: str, symbol: str, quantity: int, price: float) -> Optional[Dict]:
@@ -364,7 +376,8 @@ def order_buy_fractional_by_quantity(access_token: str, symbol: str, quantity: f
 
 def order_sell_fractional_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
     """Sell fractional shares by quantity - STATELESS VERSION"""
-    return order(access_token, symbol, quantity, 'sell', 'market')
+    # Fractional orders MUST use 'ioc' (immediate or cancel)
+    return order(access_token, symbol, quantity, 'sell', 'market', time_in_force='ioc')
 
 # Crypto order functions  
 def order_buy_crypto_by_price(access_token: str, symbol: str, amount_in_dollars: float) -> Optional[Dict]:
