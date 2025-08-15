@@ -28,8 +28,8 @@ def _get_sheriff_id(data):
     raise Exception("Error: No verification ID returned in user-machine response")
 
 
-def _validate_sheriff_id(device_token: str, workflow_id: str):
-    """EXACT COPY OF WORKING ORIGINAL VALIDATION"""
+def _validate_sheriff_id(device_token: str, workflow_id: str, challenge_callback: Optional[Callable[[str, str], str]] = None):
+    """EXACT COPY OF WORKING ORIGINAL VALIDATION WITH CALLBACK SUPPORT"""
     print("Starting verification process...")
     pathfinder_url = "https://api.robinhood.com/pathfinder/user_machine/"
     machine_payload = {'device_id': device_token, 'flow': 'suv', 'input': {'workflow_id': workflow_id}}
@@ -55,6 +55,14 @@ def _validate_sheriff_id(device_token: str, workflow_id: str):
             challenge_id = challenge["id"]
             if challenge_type == "prompt":
                 print("Check robinhood app for device approvals method...")
+                
+                # Use callback for app prompt if available
+                if challenge_callback:
+                    try:
+                        challenge_callback("prompt", "Check your Robinhood mobile app and approve this login request")
+                    except Exception as e:
+                        print(f"Challenge callback failed: {e}")
+                
                 prompt_url = f"https://api.robinhood.com/push/{challenge_id}/get_prompts_status/"
                 while True:
                     time.sleep(5)
@@ -68,7 +76,12 @@ def _validate_sheriff_id(device_token: str, workflow_id: str):
                 break  # Stop polling once verification is complete
 
             if challenge_type in ["sms", "email"] and challenge_status == "issued":
-                user_code = input(f"Enter the {challenge_type} verification code sent to your device: ")
+                # Use callback if available, otherwise fallback to input for testing
+                if challenge_callback:
+                    user_code = challenge_callback(challenge_type, f"Enter the {challenge_type} verification code")
+                else:
+                    user_code = input(f"Enter the {challenge_type} verification code sent to your device: ")
+                    
                 challenge_url = f"https://api.robinhood.com/challenge/{challenge_id}/respond/"
                 challenge_payload = {"response": user_code}
                 challenge_response = _make_request('POST', challenge_url, data=challenge_payload)
@@ -149,7 +162,7 @@ def login_and_get_token(username: str, password: str, mfa_code: Optional[str] = 
     
     # EXACT LOGIC FROM WORKING ORIGINAL - Handle 403 as valid response like original
     try:
-        data = _make_request('POST', url, data=login_payload)
+        data = _make_request('POST', url, json=login_payload)
     except Exception as e:
         # Check if this is a 403 with verification workflow (like original handles)
         if hasattr(e, '__cause__') and hasattr(e.__cause__, 'response'):
@@ -175,11 +188,11 @@ def login_and_get_token(username: str, password: str, mfa_code: Optional[str] = 
             if 'verification_workflow' in data:
                 print("Verification required, handling challenge...")
                 workflow_id = data['verification_workflow']['id']
-                _validate_sheriff_id(device_token, workflow_id)
+                _validate_sheriff_id(device_token, workflow_id, challenge_callback)
 
                 # Reattempt login after verification - EXACT FROM ORIGINAL
                 try:
-                    data = _make_request('POST', url, data=login_payload)
+                    data = _make_request('POST', url, json=login_payload)
                 except Exception as e:
                     # Handle 403 as valid response during reattempt too
                     if hasattr(e, '__cause__') and hasattr(e.__cause__, 'response'):

@@ -245,18 +245,12 @@ def order(access_token: str, symbol: str, quantity: Union[int, float], side: str
 def order_buy_market(access_token: str, symbol: str, quantity: Union[int, float], 
                      time_in_force: str = 'gfd', extended_hours: bool = False) -> Optional[Dict]:
     """Buy market order - STATELESS VERSION (supports fractional shares)"""
-    # Use 'ioc' for fractional shares, 'gfd' for whole shares
-    if isinstance(quantity, float) and quantity != int(quantity):
-        time_in_force = 'ioc'  # Fractional orders need immediate or cancel
     return order(access_token, symbol, quantity, 'buy', 'market', 
                 time_in_force=time_in_force, extended_hours=extended_hours)
 
 def order_sell_market(access_token: str, symbol: str, quantity: Union[int, float], 
                       time_in_force: str = 'gfd', extended_hours: bool = False) -> Optional[Dict]:
     """Sell market order - STATELESS VERSION"""
-    # Use 'ioc' for fractional shares, 'gfd' for whole shares
-    if isinstance(quantity, float) and quantity != int(quantity):
-        time_in_force = 'ioc'  # Fractional orders need immediate or cancel
     return order(access_token, symbol, quantity, 'sell', 'market', 
                 time_in_force=time_in_force, extended_hours=extended_hours)
 
@@ -376,8 +370,8 @@ def order_buy_fractional_by_quantity(access_token: str, symbol: str, quantity: f
 
 def order_sell_fractional_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
     """Sell fractional shares by quantity - STATELESS VERSION"""
-    # Fractional orders MUST use 'ioc' (immediate or cancel)
-    return order(access_token, symbol, quantity, 'sell', 'market', time_in_force='ioc')
+    # Use 'gfd' (good for day) like original GitHub implementation
+    return order(access_token, symbol, quantity, 'sell', 'market', time_in_force='gfd')
 
 # Crypto order functions  
 def order_buy_crypto_by_price(access_token: str, symbol: str, amount_in_dollars: float) -> Optional[Dict]:
