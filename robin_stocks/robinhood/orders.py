@@ -390,33 +390,37 @@ def order_buy_fractional_by_price(access_token: str, symbol: str, amount_in_doll
                 time_in_force=time_in_force, market_hours=market_hours)
 
 def order_sell_fractional_by_price(access_token: str, symbol: str, amount: float) -> Optional[Dict]:
-    """Sell fractional shares by dollar amount - STATELESS VERSION"""
-    headers = {'Authorization': f'Bearer {access_token}'}
-    
-    # Get account URL
-    account_url = _get_account_url(access_token)
-    if not account_url:
+    """Sell fractional shares by dollar amount - STATELESS VERSION
+
+    Note: Converts dollar amount to quantity and uses order_sell_fractional_by_quantity
+    because dollar_based_amount approach doesn't work reliably with the API
+    """
+    if amount < 1:
+        print(f"ERROR: Fractional share price should meet minimum 1.00, got {amount}")
         return None
-    
-    instrument_response = _make_request('GET', instruments_url(), 
-                                      headers=headers, params={'symbol': symbol})
-    
-    if not instrument_response or not instrument_response.get('results'):
+
+    # Get the current bid price to calculate fractional shares
+    from .stocks import get_quotes
+    quotes = get_quotes(access_token, [symbol])
+
+    if not quotes or not quotes[0]:
+        print(f"ERROR: Could not get quote for {symbol}")
         return None
-    
-    instrument_url = instrument_response['results'][0]['url']
-    
-    payload = {
-        'account': account_url,
-        'instrument': instrument_url,
-        'symbol': symbol,
-        'side': 'sell',
-        'dollar_based_amount': str(amount),
-        'type': 'market',
-        'time_in_force': 'gfd'
-    }
-    
-    return _make_request('POST', orders_url(), headers=headers, json=payload)
+
+    quote = quotes[0]
+    bid_price = float(quote.get('bid_price', 0.0))
+
+    if bid_price == 0.0:
+        print(f"ERROR: Invalid bid price for {symbol}")
+        return None
+
+    # Calculate fractional shares (round to 6 decimals for Robinhood API)
+    fractional_shares = round(amount / bid_price, 6)
+
+    print(f"ROBINHOOD DEBUG: {symbol} bid_price=${bid_price}, amount=${amount}, fractional_shares={fractional_shares}")
+
+    # Use fractional by quantity which works reliably
+    return order_sell_fractional_by_quantity(access_token, symbol, fractional_shares)
 
 def order_buy_fractional_by_quantity(access_token: str, symbol: str, quantity: float) -> Optional[Dict]:
     """Buy fractional shares by quantity - STATELESS VERSION (matching original robin-stocks)"""
