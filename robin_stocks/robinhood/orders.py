@@ -163,50 +163,86 @@ def get_stock_order_info(access_token: str, order_id: str) -> Optional[Dict]:
     headers = {'Authorization': f'Bearer {access_token}'}
     return _make_request('GET', orders_url(order_id), headers=headers)
 
-def order(access_token: str, symbol: str, quantity: Union[int, float], side: str, 
+def order(access_token: str, symbol: str, quantity: Union[int, float], side: str,
           order_type: str = 'market', price: Optional[float] = None, stop_price: Optional[float] = None,
           time_in_force: str = 'gtc', market_hours: str = 'regular_hours', extended_hours: bool = False, **kwargs) -> Optional[Dict]:
     """Generic order function - STATELESS VERSION - Fixed to match original robin_stocks exactly"""
     headers = {'Authorization': f'Bearer {access_token}'}
-    
+
     try:
         symbol = symbol.upper().strip()
     except AttributeError as message:
         print(f"Symbol error: {message}")
         return None
-    
+
+    # Determine trigger type
+    trigger = "immediate"
+
     # Determine order type like original
     if price and stop_price:
-        order_type = "stop_limit"
+        order_type = "limit"
+        trigger = "stop"
+        price = round_price(price)
+        stop_price = round_price(stop_price)
     elif price:
         order_type = "limit"
+        price = round_price(price)
     elif stop_price:
-        order_type = "stop_loss"
+        order_type = "market"
+        trigger = "stop"
+        stop_price = round_price(stop_price)
+        if side == "buy":
+            price = stop_price
+        else:
+            price = None
     else:
         order_type = "market"
-    
+
     # Get account URL
     account_url = _get_account_url(access_token)
     if not account_url:
         return None
-    
+
     # Get instrument
-    instrument_response = _make_request('GET', instruments_url(), 
+    instrument_response = _make_request('GET', instruments_url(),
                                       headers=headers, params={'symbol': symbol})
-    
+
     if not instrument_response or not instrument_response.get('results'):
         return None
-    
+
     instrument_url = instrument_response['results'][0]['url']
-    
+
+    # Get current prices (CRITICAL - needed for order validation)
+    from robin_stocks.robinhood.stocks import get_quotes
+    quote = get_quotes(access_token, [symbol])
+    if not quote or not quote[0]:
+        print(f"Could not get quote for {symbol}")
+        return None
+
+    quote_data = quote[0]
+    ask_price_str = quote_data.get('ask_price', '0.00')
+    bid_price_str = quote_data.get('bid_price', '0.00')
+    last_price_str = quote_data.get('last_trade_price', '0.00')
+
+    ask_price = round_price(ask_price_str)
+    bid_price = round_price(bid_price_str)
+
+    # For market orders, set price from ask/bid like original
+    if order_type == "market" and trigger == "immediate":
+        if side == "buy":
+            price = ask_price
+        else:
+            price = bid_price
+
     # Generate unique reference ID like original
     import uuid
+    from datetime import datetime
     ref_id = str(uuid.uuid4())
-    
+
     # Round quantity if it's a string (like original)
     if isinstance(quantity, str):
         quantity = round_price(quantity)
-    
+
     # Fix extended_hours and market_hours consistency (like original)
     if extended_hours:
         market_hours = 'extended_hours'
@@ -214,31 +250,51 @@ def order(access_token: str, symbol: str, quantity: Union[int, float], side: str
     else:
         market_hours = 'regular_hours'
         extended_hours = False
-    
+
     # Build payload EXACTLY like original robin-stocks
     payload = {
         'account': account_url,
         'instrument': instrument_url,
         'symbol': symbol,
-        'price': price,  # None for market orders - will be removed below
+        'price': price,
+        'ask_price': ask_price,
+        'bid_ask_timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'),
+        'bid_price': bid_price,
         'quantity': quantity,
         'ref_id': ref_id,
         'type': order_type,
-        'stop_price': stop_price,  # None unless stop order - will be removed below
+        'stop_price': stop_price,
         'time_in_force': time_in_force,
-        'trigger': 'immediate',
+        'trigger': trigger,
         'side': side,
-        'extended_hours': extended_hours,
         'market_hours': market_hours,
+        'extended_hours': extended_hours,
         'order_form_version': 4
     }
-    
-    # Remove all keys that have 'None' as value (CRITICAL - like original)
+
+    # Adjust market orders like original
+    if order_type == 'market':
+        if trigger != "stop":
+            del payload['stop_price']
+
+    # Convert market buy orders to limit orders with 5% collar during regular hours (CRITICAL)
+    if market_hours == 'regular_hours':
+        if side == "buy":
+            payload['preset_percent_limit'] = "0.05"
+            payload['type'] = 'limit'
+        # Regular market sell - remove price
+        elif order_type == 'market' and side == 'sell':
+            del payload['price']
+    elif market_hours in ('extended_hours', 'all_day_hours'):
+        payload['type'] = 'limit'
+        payload['quantity'] = int(payload['quantity'])  # Round to integer for extended hours
+
+    # Remove None values
     payload = {key: value for key, value in payload.items() if value is not None}
-    
+
     # Debug output
     print(f"ROBINHOOD PAYLOAD DEBUG: Full order payload for {symbol}: {payload}")
-    
+
     return _make_request('POST', orders_url(), headers=headers, json=payload)
 
 # Market order functions
